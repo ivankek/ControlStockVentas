@@ -8,6 +8,11 @@ export type Order = {
   id: string;
   shipmentId?: string;
   shippingStatus?: string;
+  orderStatus?: string;
+  buyerName?: string;
+  receiverName?: string;
+  province?: string;
+  city?: string;
   mode: Mode;
   createdAt: string;
   expectedDate?: string;

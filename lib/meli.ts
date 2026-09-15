@@ -100,6 +100,7 @@ type RawOrder = {
   id: number;
   date_created: string;
   status: string;
+  buyer?: { first_name?: string; last_name?: string; nickname?: string };
   seller?: { id: number };
   shipping?: { id: number | null };
   order_items: {
@@ -184,6 +185,8 @@ export async function importOrders(user: string, previous: State, queryDate?: st
       });
       const order: Order = {
         id,
+        orderStatus: o.status,
+        buyerName: [o.buyer?.first_name, o.buyer?.last_name].filter(Boolean).join(" ").trim() || o.buyer?.nickname || undefined,
         createdAt: o.date_created,
         mode: "acordar",
         cancelled: o.status === "cancelled",
@@ -212,6 +215,10 @@ export async function importOrders(user: string, previous: State, queryDate?: st
           shipments.set(sid, info);
         }
         const s = info.shipment;
+        const address = s.destination?.shipping_address ?? s.receiver_address;
+        order.receiverName = s.destination?.receiver_name ?? s.receiver_address?.receiver_name;
+        order.province = address?.state?.name;
+        order.city = address?.city?.name;
         order.shippingStatus = s.status;
         order.shipmentId = sid;
         order.mode =

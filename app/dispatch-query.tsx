@@ -8,7 +8,22 @@ const statuses: Record<string, string> = {
   pending: "Pendiente", handling: "En preparación", ready_to_ship: "Listo para enviar",
   shipped: "En camino", delivered: "Entregado", not_delivered: "No entregado",
   cancelled: "Cancelado", returned: "Devuelto",
+  to_be_agreed: "A coordinar", not_verified: "Sin verificar", closed: "Cerrado",
+  error: "Error de envío", active: "Activo", not_specified: "Sin especificar",
+  stale_ready_to_ship: "Pendiente de envío demorado", stale_shipped: "Envío demorado",
 };
+const orderStatuses: Record<string, string> = {
+  confirmed: "Confirmado", payment_required: "Pendiente de pago", payment_in_process: "Pago en proceso",
+  partially_paid: "Pago parcial", paid: "Pagado", partially_refunded: "Reembolso parcial",
+  pending_cancel: "Cancelación pendiente", cancelled: "Cancelado", invalid: "No válido",
+};
+function statusColor(status?: string) {
+  if (["delivered", "paid"].includes(status ?? "")) return "success";
+  if (["shipped", "confirmed", "active"].includes(status ?? "")) return "info";
+  if (["cancelled", "not_delivered", "invalid", "error"].includes(status ?? "")) return "danger";
+  if (status && (statuses[status] || orderStatuses[status])) return "warning";
+  return "neutral";
+}
 export default function DispatchQuery({ token }: { token?: string }) {
   const [date, setDate] = useState(today);
   const [result, setResult] = useState<DispatchQueryResult>();
@@ -43,11 +58,17 @@ export default function DispatchQuery({ token }: { token?: string }) {
   function row(o: Order) {
     const mode = o.mode === "flex" ? "Flex" : o.mode === "correo" ? "Mercado Envíos · correo" : "Acordar con el comprador / personalizado";
     return <div className="pending-row" key={o.id}><div className="order-text">
-      <strong>Pedido {o.id}</strong>
+      <div className="dispatch-heading"><strong>ID de orden: {o.id}</strong>
+        <span className={`dispatch-status ${statusColor(o.shippingStatus)}`}>Envío: {statuses[o.shippingStatus ?? ""] ?? (o.shippingStatus ? "Estado no reconocido" : "Sin seguimiento")}</span>
+        <span className={`dispatch-status ${statusColor(o.orderStatus)}`}>Pedido: {orderStatuses[o.orderStatus ?? ""] ?? "Sin información"}</span>
+      </div>
       <p>{o.lines.map((l) => `${result?.products.find((p) => p.id === l.productId)?.name ?? l.productId} × ${l.quantity}`).join(" · ")}</p>
-      <small>{mode} · {statuses[o.shippingStatus ?? ""] ?? o.shippingStatus ?? "Sin seguimiento disponible"}</small>
+      <p className="dispatch-customer">Comprador: <strong>{o.buyerName || "No informado"}</strong></p>
+      {!o.buyerName && o.receiverName && <small>Destinatario: {o.receiverName}</small>}
+      <small>Provincia: {o.province || "No informada"} · Localidad: {o.city || "No informada"}</small>
+      <small>{mode}</small>
       {o.cancelled && <small>Venta cancelada: revisar antes de pagar al proveedor.</small>}
-      {o.evidence && <small>{o.evidence}</small>}
+      {o.dispatchedDate && <small>Despacho registrado: {o.dispatchedDate.split("-").reverse().join("/")} · Mercado Libre</small>}
       {o.review && <small>{o.review}</small>}
     </div></div>;
   }

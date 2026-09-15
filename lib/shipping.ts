@@ -5,6 +5,11 @@ export type Shipment = {
   substatus?: string;
   logistic_type?: string;
   mode?: string;
+  destination?: {
+    receiver_name?: string;
+    shipping_address?: { state?: { name?: string }; city?: { name?: string } };
+  };
+  receiver_address?: { receiver_name?: string; state?: { name?: string }; city?: { name?: string } };
   logistic?: { mode?: string; type?: string };
   lead_time?: { estimated_delivery_time?: { date?: string } };
   status_history?: { date_shipped?: string };
