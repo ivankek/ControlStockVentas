@@ -1,7 +1,7 @@
 import { admin, required } from "./server";
 import { seal, unseal } from "./crypto";
 import { flexDate, localDate, Order, Product, State } from "./domain";
-import { dispatchEvidence, History, Shipment } from "./shipping";
+import { dispatchEvidence, normalizeShipment, History, Shipment } from "./shipping";
 type Tokens = {
   access_token: string;
   refresh_token: string;
@@ -193,10 +193,10 @@ export async function importOrders(user: string, previous: State, queryDate?: st
         const sid = String(o.shipping.id);
         let info = shipments.get(sid);
         if (!info) {
-          const shipment = await get<Shipment>(
+          const shipment = normalizeShipment(await get<Shipment>(
             `/shipments/${sid}`,
             tokens.access_token,
-          );
+          ));
           const history =
             shipment.mode === "me2"
               ? await get<History>(

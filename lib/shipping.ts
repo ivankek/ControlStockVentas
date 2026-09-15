@@ -5,9 +5,20 @@ export type Shipment = {
   substatus?: string;
   logistic_type?: string;
   mode?: string;
+  logistic?: { mode?: string; type?: string };
+  lead_time?: { estimated_delivery_time?: { date?: string } };
   status_history?: { date_shipped?: string };
   shipping_option?: { estimated_delivery_time?: { date?: string } };
 };
+// x-format-new nests logistics and estimates; keep support for legacy responses.
+export function normalizeShipment(shipment: Shipment): Shipment {
+  return {
+    ...shipment,
+    mode: shipment.logistic?.mode ?? shipment.mode,
+    logistic_type: shipment.logistic?.type ?? shipment.logistic_type,
+    shipping_option: shipment.lead_time ?? shipment.shipping_option,
+  };
+}
 export type History = { status: string; substatus?: string; date: string }[];
 export function dispatchEvidence(shipment: Shipment, history: History) {
   const events = history.filter(

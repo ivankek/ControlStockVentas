@@ -27,7 +27,10 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
         shipping: id === 3 ? null : { id }, order_items: [{ item: { id: "MLA1", title: "Producto" }, quantity: 2 }],
       })) };
     } else if (/^\/shipments\/\d+$/.test(url.pathname)) {
-      body = { id: Number(url.pathname.split("/").at(-1)), status: "delivered", mode: "me2", logistic_type: "self_service" };
+      const id = Number(url.pathname.split("/").at(-1));
+      body = id === 4
+        ? { id, status: "delivered", mode: "me2", logistic_type: "self_service" }
+        : { id, status: "delivered", logistic: { mode: "me2", type: id === 1 ? "self_service" : "drop_off" }, lead_time: { estimated_delivery_time: { date: "2026-09-15T18:00:00Z" } } };
     } else if (/^\/shipments\/\d+\/history$/.test(url.pathname)) {
       body = [{ status: "shipped", date: url.pathname.includes("/2/") ? "2026-09-14T02:30:00Z" : "2026-09-15T02:30:00Z" }, { status: "delivered", date: "2026-09-15T18:00:00Z" }];
     } else throw Error(`Consulta inesperada: ${url.pathname}`);
@@ -40,6 +43,11 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   const data = await response.json();
   assert.deepEqual(data.orders.map((o: { id: string }) => o.id), ["1", "4"]);
   assert.equal(data.orders[0].shippingStatus, "delivered");
+  assert.equal(data.orders[0].mode, "flex");
+  assert.equal(data.orders[0].dispatchedDate, "2026-09-14");
+  assert.equal(data.orders[0].expectedDate, "2026-09-15");
+  assert.ok(calls.includes("/shipments/1/history"));
+  assert.ok(calls.includes("/shipments/2/history"));
   assert.equal(data.orders[1].cancelled, true);
   assert.deepEqual(data.unverified.map((o: { id: string }) => o.id), ["3"]);
   assert.ok(!calls.includes("/rest/v1/account_states"));
