@@ -57,7 +57,7 @@ export async function saveTokens(id: string, tokens: Tokens) {
     });
   if (error) throw Error("No se pudo guardar la conexión de Mercado Libre.");
 }
-async function access(id: string) {
+export async function access(id: string) {
   const { data, error } = await admin()
     .from("meli_connections")
     .select("encrypted_tokens")
@@ -74,7 +74,7 @@ async function access(id: string) {
   }
   return tokens;
 }
-async function get<T>(path: string, token: string): Promise<T> {
+export async function get<T>(path: string, token: string): Promise<T> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const response = await fetch(`https://api.mercadolibre.com${path}`, {
       headers: { Authorization: `Bearer ${token}`, "x-format-new": "true" },

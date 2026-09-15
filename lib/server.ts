@@ -40,6 +40,7 @@ export async function mutate(userId: string, fn: (s: State) => State) {
   for (let i = 0; i < 3; i++) {
     const { state, version } = await readState(userId);
     const next = fn(state);
+    if (next === state) return state;
     const { data, error } = await admin().rpc("save_account_state", {
       p_owner: userId,
       p_expected: version,

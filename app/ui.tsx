@@ -1,5 +1,6 @@
 "use client";
 import DispatchQuery from "./dispatch-query";
+import Listings from "./listings";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -273,6 +274,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
         <nav aria-label="Secciones">
           {[
             { name: "Despachos", icon: Truck },
+            { name: "Publicaciones", icon: Package },
             { name: "Costos", icon: Tag },
             { name: "Liquidaciones", icon: Wallet },
             { name: "Conexión", icon: Link2 },
@@ -331,6 +333,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               <p>
                 {tab === "Despachos"
                   ? "Revisá qué salió y cuánto tenés que pagarle a tu proveedor."
+                  : tab === "Publicaciones"
+                    ? "Importá y actualizá el catálogo de tu cuenta de Mercado Libre."
                   : tab === "Costos"
                     ? "El precio que te cobra tu proveedor por cada unidad vendida."
                     : tab === "Liquidaciones"
@@ -366,6 +370,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               </button>
             </div>
           )}
+          {tab === "Publicaciones" && <Listings token={token} />}
           {tab === "Despachos" && !demo && <DispatchQuery token={token} />}
           {tab === "Despachos" && demo && (
             <>

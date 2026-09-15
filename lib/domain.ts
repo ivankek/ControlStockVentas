@@ -38,6 +38,7 @@ export type Settlement = {
   total: number;
 };
 export type State = {
+  listings?: import("./listings").Listing[];
   products: Product[];
   orders: Order[];
   settlements: Settlement[];
