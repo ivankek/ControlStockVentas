@@ -7,6 +7,7 @@ export type Product = {
 export type Order = {
   id: string;
   shipmentId?: string;
+  shippingStatus?: string;
   mode: Mode;
   createdAt: string;
   expectedDate?: string;

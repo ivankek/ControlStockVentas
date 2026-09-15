@@ -75,6 +75,6 @@ Este ejemplo sintético verifica el receptor, no la conexión de Mercado Libre.
 Para verificar entregas reales, autorizar la aplicación con la cuenta vendedora,
 mantener habilitados los topics/callback y observar una notificación al ocurrir
 un evento real. Confirmar horarios con los registros; no realizar ventas ficticias.
-La sincronización manual sigue siendo el mecanismo para importar ventas.
+La consulta manual por fecha muestra las ventas temporalmente, sin guardarlas en la base de datos.
 
 Pruebas locales: `npm test` y `npm run build`.

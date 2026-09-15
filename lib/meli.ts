@@ -115,13 +115,14 @@ type RawOrder = {
 type Search = { results: RawOrder[]; paging: { total: number } };
 // Only one sync per account in this Node process. Database writes are separately atomic.
 const running = new Set<string>();
-export async function importOrders(user: string, previous: State) {
+export async function importOrders(user: string, previous: State, queryDate?: string) {
   if (running.has(user)) throw Error("Ya hay una actualización en curso.");
   running.add(user);
   try {
     const tokens = await access(user);
     const raw = new Map<string, RawOrder>();
-    const from = new Date(Date.now() - 90 * 86400000).toISOString();
+    const from = new Date((queryDate ? Date.parse(`${queryDate}T00:00:00-03:00`) : Date.now()) - 90 * 86400000).toISOString();
+    const until = queryDate ? `&order.date_created.to=${encodeURIComponent(`${queryDate}T23:59:59.999-03:00`)}` : "";
     let total = Infinity;
     for (let offset = 0; offset < total; offset += 50) {
       if (offset >= 10000)
@@ -129,7 +130,7 @@ export async function importOrders(user: string, previous: State) {
           "La consulta supera 10.000 ventas. Es necesario dividir la importación por períodos antes de continuar.",
         );
       const page = await get<Search>(
-        `/orders/search?seller=${tokens.user_id}&order.date_created.from=${encodeURIComponent(from)}&sort=date_desc&limit=50&offset=${offset}`,
+        `/orders/search?seller=${tokens.user_id}&order.date_created.from=${encodeURIComponent(from)}${until}&sort=date_desc&limit=50&offset=${offset}`,
         tokens.access_token,
       );
       if (
@@ -165,7 +166,7 @@ export async function importOrders(user: string, previous: State) {
         throw Error("Se recibió un pedido incompleto.");
       const id = String(o.id);
       const old = previous.orders.find((p) => p.id === id);
-      if (o.status !== "paid" && o.status !== "partially_refunded" && !old)
+      if (o.status !== "paid" && o.status !== "partially_refunded" && !old && !queryDate)
         continue;
       const lines = o.order_items.map((line) => {
         if (!Number.isInteger(line.quantity) || line.quantity <= 0)
@@ -211,6 +212,7 @@ export async function importOrders(user: string, previous: State) {
           shipments.set(sid, info);
         }
         const s = info.shipment;
+        order.shippingStatus = s.status;
         order.shipmentId = sid;
         order.mode =
           s.logistic_type === "self_service"
@@ -224,9 +226,9 @@ export async function importOrders(user: string, previous: State) {
           : order.mode === "flex"
             ? flexDate(o.date_created)
             : undefined;
-        const event = dispatchEvidence(s, info.history);
+        const event = dispatchEvidence(s, queryDate ? info.history.filter((e) => e.status === "shipped") : info.history);
         if (event && order.mode !== "acordar") {
-          if (process.env.MELI_DISPATCH_RULES_VERIFIED === "true") {
+          if (queryDate || process.env.MELI_DISPATCH_RULES_VERIFIED === "true") {
             order.dispatchedDate = event.date;
             order.evidence = event.evidence;
           } else {

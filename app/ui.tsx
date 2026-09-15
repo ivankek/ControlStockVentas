@@ -1,4 +1,5 @@
 "use client";
+import DispatchQuery from "./dispatch-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -129,7 +130,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
       setTab("Conexión");
       setMessage(
         result === "ok"
-          ? "Mercado Libre conectado. Ya podés actualizar tus ventas."
+          ? "Mercado Libre conectado. Ya podés consultar tus despachos por fecha."
           : "No se pudo completar la autorización. Volvé a conectar.",
       );
       history.replaceState(null, "", "/");
@@ -337,7 +338,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                       : "Conectá tus ventas para empezar a trabajar con datos reales."}
               </p>
             </div>
-            {tab === "Despachos" && (
+            {tab === "Despachos" && demo && (
               <button
                 className="primary"
                 disabled={busy}
@@ -349,13 +350,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                     );
                     return;
                   }
-                  void run(async () => {
-                    const data = await api("/api/sync", {});
-                    setState(data.state);
-                    setMessage(
-                      "Ventas y envíos actualizados. Revisá las incidencias antes de cerrar.",
-                    );
-                  });
+
                 }}
               >
                 <RefreshCw size={16} />
@@ -371,7 +366,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               </button>
             </div>
           )}
-          {tab === "Despachos" && (
+          {tab === "Despachos" && !demo && <DispatchQuery token={token} />}
+          {tab === "Despachos" && demo && (
             <>
               <div className="toolbar">
                 <label>
@@ -888,9 +884,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                 </button>
                 <h3>3. Costos del proveedor</h3>
                 <p>
-                  Después de importar tus ventas, asigná los costos por
-                  producto. Los despachos sin costo quedan pendientes de
-                  liquidación.
+                  La consulta por fecha es temporal. Los pedidos consultados no se guardan ni se incorporan a Costos o Liquidaciones.
                 </p>
                 <button
                   disabled={!token || !connected || busy}
