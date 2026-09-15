@@ -15,6 +15,8 @@ const itemSchema = z.object({
   seller_id: z.number().int().safe(),
   user_product_id: z.string().nullish(),
   listing_type_id: z.string().nullish(),
+  tags: z.array(z.string()).optional(),
+  shipping: z.object({ free_shipping: z.boolean().optional() }).nullish(),
   title: z.string(), price: z.number().nonnegative(),
   currency_id: z.string(), available_quantity: quantity,
   status: z.string(), variations: z.array(variationSchema).default([]),

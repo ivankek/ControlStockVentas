@@ -623,3 +623,7 @@ footer {
 .supplier-binding select, .supplier-binding input { padding: 10px; max-width: 100%; border: 1px solid #d8e1de; border-radius: 8px; background: white; }
 .listing-group { padding: 20px; border-top: 1px solid #d8e1de; }
 .listing-group summary { cursor: pointer; line-height: 1.7; }
+.units-control { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 320px; }
+.units-control .units-toggle { padding: 4px 8px; font-size: 12px; min-height: 0; }
+.units-control input[type="number"] { width: 100px; }
+.units-control small { flex-basis: 100%; }

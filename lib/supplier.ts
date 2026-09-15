@@ -7,11 +7,20 @@ export function listingKey(item: Listing) {
   return item.user_product_id && !item.variations.length ? `up:${item.user_product_id}` : `${item.id}:0`;
 }
 export function listingGroups(items: Listing[], links: State["supplierLinks"] = {}) {
+  // Exact normalized titles are also grouped at the seller's request. Keep colors,
+  // sizes, punctuation and variant definitions; never use fuzzy title matching.
+  const titleKey = (item: Listing) => JSON.stringify([item.seller_id, item.title.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es-AR"), item.variations.map((v) => v.attribute_combinations).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))]);
+  const parents = items.map((_, index) => index);
+  const root = (index: number): number => parents[index] === index ? index : (parents[index] = root(parents[index]));
+  const seen = new Map<string, number>();
+  items.forEach((item, index) => {
+    const keys = [`title:${titleKey(item)}`];
+    if (item.user_product_id && !item.variations.length) keys.push(`up:${item.seller_id}:${item.user_product_id}`);
+    for (const key of keys) { const prior = seen.get(key); if (prior !== undefined) parents[root(index)] = root(prior); else seen.set(key, index); }
+  });
   const groups = new Map<string, Listing[]>();
-  for (const item of items) {
-    const link = links[`${item.id}:0`];
-    const key = item.user_product_id && !item.variations.length ? `up:${item.user_product_id}`
-      : !item.variations.length && link ? `supplier:${link.supplierId}:${link.units}` : item.id;
+  for (const [index, item] of items.entries()) {
+    const key = items[root(index)].id;
     groups.set(key, [...(groups.get(key) ?? []), item]);
   }
   return [...groups].map(([id, options]) => ({ id, title: options[0].title, options }));

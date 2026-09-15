@@ -4,9 +4,15 @@ import { emptyState, type State, type Order } from "../lib/domain";
 import { normalizeListing, mergeListings } from "../lib/listings";
 import { listingGroups, supplierReport, updateSupplier } from "../lib/supplier";
 const listing = (id: string, up?: string) => normalizeListing({ id, user_product_id: up, seller_id: 42, title: "Mismo título", price: 100, currency_id: "ARS", status: "active", available_quantity: 4 }, 42);
-test("agrupa opciones por UP, sin confundir títulos iguales ni sumar stock", () => {
-  const groups = listingGroups([listing("MLA1", "UP1"), listing("MLA2", "UP1"), listing("MLA3", "UP2"), listing("MLA4")]);
+test("agrupa opciones por UP, sin confundir colores ni sumar stock", () => {
+  const groups = listingGroups([listing("MLA1", "UP1"), listing("MLA2", "UP1"), { ...listing("MLA3", "UP2"), title: "Producto rosa" }, { ...listing("MLA4"), title: "Producto blanco" }]);
   assert.equal(groups.length, 3); assert.equal(groups[0].options.length, 2);
+});
+test("agrupa opciones de nombre exacto incluso con UP distintos, sin depender de asociaciones", () => {
+  const items = [listing("MLA3892703454", "UP1"), { ...listing("MLA3892704876", "UP2"), price: 38000 }];
+  assert.equal(listingGroups(items).length, 1);
+  assert.equal(listingGroups(items, { "MLA3892703454:0": { supplierId: "p", units: 2 } }).length, 1);
+  assert.equal(listingGroups([items[0], { ...items[1], title: "Otro producto" }]).length, 2);
 });
 test("costos por fecha, packs, varias opciones, incompletos e incidencias", () => {
   let state: State = { ...emptyState(), listings: [listing("MLA1", "UP1"), listing("MLA2", "UP1")] };

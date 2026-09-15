@@ -44,12 +44,16 @@ Referencia: https://developers.mercadolibre.com.ar/es_ar/guia-para-carrito-de-co
 ## Opciones de venta y proveedor
 
 Actualizar publicaciones incorpora `user_product_id` y `listing_type_id`.
-Las opciones sin variantes con el mismo UP se agrupan visualmente; no se fusionan
-ni eliminan sus IDs. Cada opción conserva precio, stock y estado. No se suma
-stock de opciones porque puede ser compartido. No se agrupa automáticamente por
-título: dos productos distintos pueden llamarse igual. Para publicaciones sin UP,
-asociarlas al mismo producto del proveedor y al mismo factor de unidades también
-las reúne visualmente. Las variantes antiguas se vinculan por separado.
+Las opciones del mismo UP se agrupan visualmente. También se reúnen publicaciones
+con nombre exacto normalizado y variantes iguales, según la preferencia del vendedor;
+no se utiliza similitud aproximada ni se eliminan colores o talles del nombre.
+Cada opción conserva su ID, precio, stock, estado, cuotas y condición de envío gratis.
+No se suma el stock porque puede ser compartido. La asociación del grupo se aplica a
+todas sus opciones y variantes. Si hay asociaciones diferentes se muestra una advertencia.
+La cantidad por venta es 1 por defecto y se edita con el botón Cambiar; valores ya
+configurados se conservan. Datos de cuotas y envío ausentes requieren actualizar.
+Las cuotas se interpretan según listing_type_id y tags documentados para MLA;
+no se infiere una financiación a partir del precio.
 
 En Costos se crean productos del proveedor con nombre, costo unitario ARS y fecha
 de vigencia. Se guardan en `account_states.state.supplierProducts`; las asociaciones
