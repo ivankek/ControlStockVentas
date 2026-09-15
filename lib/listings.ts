@@ -13,6 +13,8 @@ const variationSchema = z.object({
 const itemSchema = z.object({
   id: z.string().regex(/^[A-Z]+\d+$/),
   seller_id: z.number().int().safe(),
+  user_product_id: z.string().nullish(),
+  listing_type_id: z.string().nullish(),
   title: z.string(), price: z.number().nonnegative(),
   currency_id: z.string(), available_quantity: quantity,
   status: z.string(), variations: z.array(variationSchema).default([]),

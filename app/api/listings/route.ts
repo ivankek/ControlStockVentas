@@ -7,7 +7,7 @@ const running = new Set<string>();
 export async function GET(request: Request) {
   try {
     const { state } = await readState(await owner(request));
-    return Response.json({ listings: state.listings ?? [] }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ listings: state.listings ?? [], products: state.supplierProducts ?? [], links: state.supplierLinks ?? {} }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return fail(error); }
 }
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       if (!result.added && !result.updated) return current;
       return { ...current, listings: result.listings };
     });
-    return Response.json({ listings: state.listings ?? [], ...counts }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ listings: state.listings ?? [], products: state.supplierProducts ?? [], links: state.supplierLinks ?? {}, ...counts }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return fail(error); }
   finally { if (lock) running.delete(lock); }
 }

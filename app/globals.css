@@ -617,3 +617,9 @@ footer {
 .dispatch-status.danger { background: #fee2e2; color: #991b1b; }
 .dispatch-status.neutral { background: #f1f5f9; color: #475569; }
 .dispatch-customer { margin: 8px 0; }
+.supplier-form { padding: 24px; display: grid; gap: 16px; max-width: 700px; }
+.supplier-form label, .supplier-binding label { display: grid; gap: 6px; }
+.supplier-binding { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; margin: 18px 0; }
+.supplier-binding select, .supplier-binding input { padding: 10px; max-width: 100%; border: 1px solid #d8e1de; border-radius: 8px; background: white; }
+.listing-group { padding: 20px; border-top: 1px solid #d8e1de; }
+.listing-group summary { cursor: pointer; line-height: 1.7; }

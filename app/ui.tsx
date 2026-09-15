@@ -1,6 +1,7 @@
 "use client";
 import DispatchQuery from "./dispatch-query";
 import Listings from "./listings";
+import Suppliers from "./suppliers";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -626,7 +627,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               </section>
             </>
           )}
-          {tab === "Costos" && (
+          {tab === "Costos" && !demo && <Suppliers token={token} />}
+          {tab === "Costos" && demo && (
             <>
               <section className="panel">
                 <div className="panel-title">

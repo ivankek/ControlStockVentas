@@ -18,6 +18,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
     calls.push(url.pathname);
     let body: unknown;
     if (url.pathname === "/auth/v1/user") body = { id: "owner" };
+    else if (url.pathname === "/rest/v1/account_states") body = { state: { products: [], orders: [], settlements: [] }, version: 1 };
     else if (url.pathname === "/rest/v1/meli_connections") body = { encrypted_tokens: tokens };
     else if (url.pathname === "/orders/search") {
       assert.equal(url.searchParams.get("order.date_created.to"), "2026-09-14T23:59:59.999-03:00");
@@ -50,7 +51,8 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   assert.ok(calls.includes("/shipments/2/history"));
   assert.equal(data.orders[1].cancelled, true);
   assert.deepEqual(data.unverified.map((o: { id: string }) => o.id), ["3"]);
-  assert.ok(!calls.includes("/rest/v1/account_states"));
+  assert.ok(data.supplier);
+  assert.equal(data.supplier.complete, false);
   assert.equal((await POST(request("invalid"))).status, 400);
   assert.equal((await POST(request("2999-01-01"))).status, 400);
 });

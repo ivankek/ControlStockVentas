@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { today } from "@/lib/domain";
+import { today, money } from "@/lib/domain";
 import type { Order } from "@/lib/domain";
 import type { DispatchQueryResult } from "@/lib/dispatch-query";
 
@@ -56,6 +56,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
     } finally { if (!request.signal.aborted) setBusy(false); }
   }
   function row(o: Order) {
+    const cost = result?.supplier?.orders.find((entry) => entry.orderId === o.id);
     const mode = o.mode === "flex" ? "Flex" : o.mode === "correo" ? "Mercado Envíos · correo" : "Acordar con el comprador / personalizado";
     return <div className="pending-row" key={o.id}><div className="order-text">
       <div className="dispatch-heading"><strong>ID de orden: {o.id}</strong>
@@ -70,6 +71,8 @@ export default function DispatchQuery({ token }: { token?: string }) {
       {o.cancelled && <small>Venta cancelada: revisar antes de pagar al proveedor.</small>}
       {o.dispatchedDate && <small>Despacho registrado: {o.dispatchedDate.split("-").reverse().join("/")} · Mercado Libre</small>}
       {o.review && <small>{o.review}</small>}
+      {cost && <p><strong>{cost.missing.length || cost.review ? "Costo parcial / a revisar" : "Costo del proveedor"}: {money(cost.totalCents)}</strong></p>}
+      {cost?.missing.map((text) => <small key={text}>{text}</small>)}
     </div></div>;
   }
   return <>
@@ -85,6 +88,11 @@ export default function DispatchQuery({ token }: { token?: string }) {
     {busy && <p role="status">Consultando ventas e historial de envíos. Puede tardar unos minutos.</p>}
     {result && <>
       <p className="warning">{result.warning}</p>
+      {result.supplier && <section className="panel pending"><div className="panel-title"><h2>{result.supplier.complete ? "Total del día al proveedor" : "Subtotal calculable · pendiente de revisión"}</h2><strong>{money(result.supplier.totalCents)}</strong></div>
+        <div className="table-wrap"><table><thead><tr><th>PRODUCTO DEL PROVEEDOR</th><th>UNIDADES</th><th>COSTO UNITARIO</th><th>IMPORTE</th></tr></thead><tbody>{result.supplier.rows.map((r) => <tr key={r.id}><td>{r.name}</td><td>{r.units}</td><td>{money(r.unitCents)}</td><td>{money(r.totalCents)}</td></tr>)}</tbody></table></div>
+        {!result.supplier.complete && <p className="warning">Faltan asociaciones o costos, o hay pedidos con incidencias. Revisá el detalle antes de pagar.</p>}
+        <p className="table-note">Costo vigente en la fecha consultada. No registra pagos ni descuenta pagos anteriores. Solo incluye despachos de esta fecha; los pedidos sin fecha verificable quedan fuera.</p>
+      </section>}
       <section className="panel"><div className="panel-title"><h2>Despachos del {result.date}</h2><span className="pill">{result.orders.length} pedidos</span></div>
         {result.orders.map(row)}
         {!result.orders.length && <div className="empty">No se encontraron despachos registrados para esa fecha dentro del período consultado.</div>}

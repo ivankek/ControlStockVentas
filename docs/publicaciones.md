@@ -40,3 +40,34 @@ persistan al recargar. Para verificar una actualización, usar un cambio real de
 precio o estado hecho en Mercado Libre y volver a importar.
 
 Referencia: https://developers.mercadolibre.com.ar/es_ar/guia-para-carrito-de-compras/items-y-busquedas
+
+## Opciones de venta y proveedor
+
+Actualizar publicaciones incorpora `user_product_id` y `listing_type_id`.
+Las opciones sin variantes con el mismo UP se agrupan visualmente; no se fusionan
+ni eliminan sus IDs. Cada opción conserva precio, stock y estado. No se suma
+stock de opciones porque puede ser compartido. No se agrupa automáticamente por
+título: dos productos distintos pueden llamarse igual. Para publicaciones sin UP,
+asociarlas al mismo producto del proveedor y al mismo factor de unidades también
+las reúne visualmente. Las variantes antiguas se vinculan por separado.
+
+En Costos se crean productos del proveedor con nombre, costo unitario ARS y fecha
+de vigencia. Se guardan en `account_states.state.supplierProducts`; las asociaciones
+en `supplierLinks`, aparte del catálogo importado. Actualizar publicaciones no
+sobrescribe estos datos. Las opciones de un UP comparten asociación y las opciones
+nuevas del mismo UP pueden resolverla después de actualizar el catálogo.
+Las asociaciones actuales se usan para todas las fechas consultadas; los costos
+sí tienen historial de vigencia. Editar un costo con la misma fecha reemplaza el
+valor de esa fecha. No es un registro histórico de liquidaciones cerradas.
+
+La asociación incluye unidades del proveedor por venta (por ejemplo, pack de 3
+unidades: factor 3). Si el proveedor vende el pack completo como un producto con
+costo propio, el factor es 1. Kits de varios productos distintos deben registrarse
+como un producto del proveedor con costo del kit; no se implementan composiciones.
+
+Despachos lee costos y asociaciones, sin guardar los pedidos. Calcula cantidad
+vendida × factor × costo vigente al día del despacho. Muestra costo por pedido,
+resumen por producto del proveedor y total del día. Sin asociación, sin costo
+vigente o con incidencias, se muestra subtotal incompleto/a revisar. Los pedidos
+sin fecha verificable no se suman. Este cálculo no registra pagos ni descuenta
+pagos anteriores. No se requieren migraciones o variables nuevas.
