@@ -76,11 +76,11 @@ export default function Listings({ token }: { token?: string }) {
     {message && <p className="notice" role="status">{message}</p>}
     <section className="panel"><div className="panel-title"><h2>Mis publicaciones</h2><span className="pill">{items.length} guardadas</span></div>
       <p className="table-note">Agrupadas por producto de Mercado Libre o nombre exacto y variantes iguales. Una asociación aplica a todas las opciones del grupo. Actualizá para consultar cuotas y envío gratis. No se suma el stock compartido.</p>
-      {visible.map((group) => <details className="listing-group" key={group.id}><summary><strong>{group.title}</strong> · {group.options.length} opciones de venta</summary>
+      {visible.map((group) => <details className="listing-group" key={group.id}><summary><strong>{group.title}</strong> · {group.options.length} opciones de venta <span className="pill listing-stock">Stock: {[...new Set(group.options.map((item) => item.available_quantity))].join(" / ")}{new Set(group.options.map((item) => item.available_quantity)).size > 1 ? " según opción" : ""}</span></summary>
         {binding([...new Set(group.options.flatMap((item) => item.variations.length ? item.variations.map((v) => `${item.id}:${v.id}`) : [listingKey(item), `${item.id}:0`]))])}
         {group.options.map((item, index) => <div className="pending-row" key={item.id}><div className="order-text"><strong>Opción {index + 1} · {price(item.price, item.currency_id)}</strong><p>{item.id}</p>
-          <p>{price(item.price, item.currency_id)} · Stock: {item.available_quantity} · {statuses[item.status] ?? "Otro estado"}</p>
-          <p>{installmentLabel(item)} · {item.shipping?.free_shipping === true ? "Envío gratis" : item.shipping?.free_shipping === false ? "Sin envío gratis" : "Envío gratis: no informado"}</p>
+          <p>{price(item.price, item.currency_id)} · {statuses[item.status] ?? "Otro estado"}</p>
+          <p>{installmentLabel(item)}{item.shipping?.free_shipping === true ? " · Envío gratis" : item.shipping?.free_shipping === false ? " · Sin envío gratis" : ""}</p>
           {item.variations.map((v) => <div key={v.id}><p>{v.attribute_combinations.map((a) => a.value_name).filter(Boolean).join(" / ") || v.id} · {price(v.price, item.currency_id)} · Stock: {v.available_quantity}</p></div>)}
         </div></div>)}
       </details>)}

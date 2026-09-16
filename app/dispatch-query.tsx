@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { today, money } from "@/lib/domain";
 import type { Order } from "@/lib/domain";
 import type { DispatchQueryResult } from "@/lib/dispatch-query";
+import OrderNoteEditor from "./order-note";
 
 const statuses: Record<string, string> = {
   pending: "Pendiente", handling: "En preparación", ready_to_ship: "Listo para enviar",
@@ -69,7 +70,8 @@ export default function DispatchQuery({ token }: { token?: string }) {
       <small>Provincia: {o.province || "No informada"} · Localidad: {o.city || "No informada"}</small>
       <small>{mode}</small>
       {o.cancelled && <small>Venta cancelada: revisar antes de pagar al proveedor.</small>}
-      {o.dispatchedDate && <small>Despacho registrado: {o.dispatchedDate.split("-").reverse().join("/")} · Mercado Libre</small>}
+      {o.dispatchedDate && <small>Despacho registrado: {o.dispatchedDate.split("-").reverse().join("/")} · {o.evidence === "Confirmado manualmente" ? "Confirmación manual" : "Mercado Libre"}</small>}
+      {o.mode === "acordar" && <OrderNoteEditor key={`${o.id}-${result?.notes?.[o.id]?.updatedAt}`} order={o} note={result?.notes?.[o.id]} token={token} onSaved={() => void consult()} />}
       {o.review && <small>{o.review}</small>}
       {cost && <p><strong>{cost.missing.length || cost.review ? "Costo parcial / a revisar" : "Costo del proveedor"}: {money(cost.totalCents)}</strong></p>}
       {cost?.missing.map((text) => <small key={text}>{text}</small>)}
@@ -82,7 +84,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
     </label><button className="primary" disabled={busy || !date} onClick={() => void consult()}>
       {busy ? "Consultando…" : "Consultar despachos"}
     </button></div>
-    <p className="table-note">Consulta temporal: los pedidos no se guardan en la base de datos. Al salir de esta pantalla se descartan los resultados.</p>
+    <p className="table-note">Los pedidos consultados son temporales. Se guardan únicamente las confirmaciones y los costos de envío que cargues manualmente.</p>
     {error && <p className="warning" role="alert">{error}</p>}
     {!result && !busy && !error && <div className="empty">Elegí una fecha y consultá los despachos registrados en Mercado Libre.</div>}
     {busy && <p role="status">Consultando ventas e historial de envíos. Puede tardar unos minutos.</p>}
@@ -98,7 +100,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
         {!result.orders.length && <div className="empty">No se encontraron despachos registrados para esa fecha dentro del período consultado.</div>}
       </section>
       <details className="panel pending"><summary>Sin fecha de despacho verificable ({result.unverified.length})</summary>
-        <p className="table-note">Estos pedidos del período consultado no se cuentan como despachados en la fecha elegida. Los envíos acordados requieren una confirmación externa; todavía no se registra desde esta consulta.</p>
+        <p className="table-note">Estos pedidos no se cuentan como despachados en la fecha elegida. En los envíos acordados podés registrar el despacho y su fecha.</p>
         {result.unverified.map(row)}
       </details>
     </>}

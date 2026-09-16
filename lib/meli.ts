@@ -96,10 +96,13 @@ export async function get<T>(path: string, token: string): Promise<T> {
   }
   throw Error("No se pudo consultar Mercado Libre.");
 }
-type RawOrder = {
+export type RawOrder = {
   id: number;
   date_created: string;
   status: string;
+  total_amount?: number;
+  currency_id?: string;
+  payments?: { id: number; status: string }[];
   buyer?: { first_name?: string; last_name?: string; nickname?: string };
   seller?: { id: number };
   shipping?: { id: number | null };
@@ -113,6 +116,18 @@ type RawOrder = {
     quantity: number;
   }[];
 };
+
+export async function verifiedOrder(user: string, id: string): Promise<Order> {
+  const tokens = await access(user);
+  const raw = await get<RawOrder>(`/orders/${encodeURIComponent(id)}`, tokens.access_token);
+  if (String(raw.id) !== id || raw.seller?.id !== tokens.user_id) throw Error("La venta no pertenece a la cuenta conectada.");
+  let mode: Order["mode"] = "acordar";
+  if (raw.shipping?.id) {
+    const shipment = normalizeShipment(await get<Shipment>(`/shipments/${raw.shipping.id}`, tokens.access_token));
+    mode = shipment.logistic_type === "self_service" ? "flex" : shipment.mode === "me2" ? "correo" : "acordar";
+  }
+  return { id, mode, createdAt: raw.date_created, cancelled: raw.status === "cancelled", lines: [] };
+}
 type Search = { results: RawOrder[]; paging: { total: number } };
 // Only one sync per account in this Node process. Database writes are separately atomic.
 const running = new Set<string>();

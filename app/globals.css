@@ -613,7 +613,7 @@ footer {
 .dispatch-status { display: inline-flex; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 600; }
 .dispatch-status.success { background: #dcfce7; color: #166534; }
 .dispatch-status.info { background: #dbeafe; color: #1e40af; }
-.dispatch-status.warning { background: #fef3c7; color: #92400e; }
+.dispatch-status.warning { background: #fef3c7; color: #92400e; margin: 0; padding: 5px 10px; border: 0; border-radius: 999px; line-height: inherit; }
 .dispatch-status.danger { background: #fee2e2; color: #991b1b; }
 .dispatch-status.neutral { background: #f1f5f9; color: #475569; }
 .dispatch-customer { margin: 8px 0; }
@@ -627,3 +627,25 @@ footer {
 .units-control .units-toggle { padding: 4px 8px; font-size: 12px; min-height: 0; }
 .units-control input[type="number"] { width: 100px; }
 .units-control small { flex-basis: 100%; }
+.listing-stock { float: right; margin-left: 12px; }
+.order-note { margin-top: 12px; }
+.order-note > button { padding: 5px 9px; font-size: 12px; }
+.order-note .supplier-binding { align-items: start; }
+.supplier-form textarea, .supplier-form select { padding: 10px; border: 1px solid #d8e1de; border-radius: 8px; font: inherit; max-width: 100%; }
+.profit-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 24px 0; }
+.profit-card { padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+.profit-card > strong { font-size: 30px; }
+.profit-card small, .profit-card span { color: #657976; }
+.profit-switch { display: flex; align-items: center; gap: 10px; }
+.profit-switch input { appearance: none; width: 44px; height: 25px; border: 0; border-radius: 20px; background: #c9d3d0; position: relative; cursor: pointer; padding: 0; }
+.profit-switch input::after { content: ''; position: absolute; width: 19px; height: 19px; top: 3px; left: 3px; border-radius: 50%; background: white; transition: transform .15s; }
+.profit-switch input:checked { background: #17483e; }
+.profit-switch input:checked::after { transform: translateX(19px); }
+.profit-switch input:focus-visible { outline: 3px solid #6ba798; outline-offset: 3px; }
+.profit-chart { padding: 24px; }
+.profit-bar-row { display: grid; grid-template-columns: 100px 1fr 150px; gap: 16px; align-items: center; margin: 14px 0; font-size: 13px; }
+.profit-bar-track { height: 20px; background: #eef3f1; border-radius: 4px; }
+.profit-bar { height: 100%; background: #246454; border-radius: 4px; }
+.profit-bar.negative { background: #c54a51; }
+.profit-bar-row strong { text-align: right; }
+@media (max-width: 600px) { .listing-stock { float: none; display: inline-flex; } .profit-bar-row { grid-template-columns: 80px 1fr 110px; gap: 6px; } }

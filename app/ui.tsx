@@ -2,6 +2,8 @@
 import DispatchQuery from "./dispatch-query";
 import Listings from "./listings";
 import Suppliers from "./suppliers";
+import BusinessCosts from "./business-costs";
+import Profits from "./profits";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -277,6 +279,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
             { name: "Despachos", icon: Truck },
             { name: "Publicaciones", icon: Package },
             { name: "Costos", icon: Tag },
+            { name: "Gastos del negocio", icon: Wallet },
+            { name: "Ganancias", icon: Wallet },
             { name: "Liquidaciones", icon: Wallet },
             { name: "Conexión", icon: Link2 },
           ].map(({ name, icon: Icon }) => (
@@ -338,6 +342,10 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                     ? "Importá y actualizá el catálogo de tu cuenta de Mercado Libre."
                   : tab === "Costos"
                     ? "El precio que te cobra tu proveedor por cada unidad vendida."
+                  : tab === "Gastos del negocio"
+                    ? "Tarifas Flex por zona, monotributo y cargos mensuales adicionales."
+                  : tab === "Ganancias"
+                    ? "Tus ventas y el resultado del negocio, por período."
                     : tab === "Liquidaciones"
                       ? "Tus cierres y pagos, con el detalle guardado."
                       : "Conectá tus ventas para empezar a trabajar con datos reales."}
@@ -372,6 +380,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
             </div>
           )}
           {tab === "Publicaciones" && <Listings token={token} />}
+          {tab === "Gastos del negocio" && <BusinessCosts token={token} />}
+          {tab === "Ganancias" && <Profits token={token} />}
           {tab === "Despachos" && !demo && <DispatchQuery token={token} />}
           {tab === "Despachos" && demo && (
             <>

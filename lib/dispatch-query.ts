@@ -10,4 +10,4 @@ export function dispatchQueryResult(result: { orders: Order[]; products: Product
     warning: "Se consultan ventas creadas desde 90 días antes hasta el día elegido. Una venta anterior puede quedar fuera. La fecha corresponde al estado enviado registrado por Mercado Libre, en horario argentino.",
   };
 }
-export type DispatchQueryResult = ReturnType<typeof dispatchQueryResult> & { supplier?: ReturnType<typeof import("./supplier").supplierReport> };
+export type DispatchQueryResult = ReturnType<typeof dispatchQueryResult> & { notes?: Record<string, import("./business").OrderNote>; supplier?: ReturnType<typeof import("./supplier").supplierReport> };
