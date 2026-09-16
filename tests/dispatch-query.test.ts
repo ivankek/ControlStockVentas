@@ -1,3 +1,4 @@
+import { inventoryReadMock } from "./inventory-fixture";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { POST } from "../app/api/sync/route";
@@ -13,13 +14,15 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   const tokens = seal({ access_token: "test", refresh_token: "test", expires_at: Date.now() + 3600000, user_id: 42 });
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
+    const inventory = inventoryReadMock(url, tokens); if (inventory) return inventory;
     const method = init?.method ?? (input instanceof Request ? input.method : "GET");
     assert.equal(method.toUpperCase(), "GET", "La consulta no debe escribir en Supabase ni Mercado Libre");
     calls.push(url.pathname);
     let body: unknown;
     if (url.pathname === "/auth/v1/user") body = { id: "owner" };
     else if (url.pathname === "/rest/v1/account_states") body = { state: { products: [], orders: [], settlements: [] }, version: 1 };
-    else if (url.pathname === "/rest/v1/meli_connections") body = { encrypted_tokens: tokens };
+    else if (url.pathname === "/rest/v1/meli_connections") body = { seller_id: "42" };
+    else if (url.pathname === "/rest/v1/meli_listings") body = [];
     else if (url.pathname === "/orders/search") {
       assert.equal(url.searchParams.get("order.date_created.to"), "2026-09-14T23:59:59.999-03:00");
       assert.equal(url.searchParams.get("order.date_created.from"), "2026-06-16T03:00:00.000Z");

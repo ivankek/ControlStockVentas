@@ -1,4 +1,6 @@
 import { admin, required } from "./server";
+import { randomUUID } from "node:crypto";
+import { accountFor, sellerProfile } from "./inventory-server";
 import { seal, unseal } from "./crypto";
 import { flexDate, localDate, Order, Product, State } from "./domain";
 import { dispatchEvidence, normalizeShipment, History, Shipment } from "./shipping";
@@ -36,43 +38,36 @@ export async function exchange(
   return { ...raw, expires_at: Date.now() + Number(raw.expires_in) * 1000 };
 }
 export async function saveTokens(id: string, tokens: Tokens) {
-  const db = admin();
-  const existing = await db
-    .from("meli_connections")
-    .select("seller_id")
-    .eq("owner_id", id)
-    .maybeSingle();
-  if (existing.error) throw Error("No se pudo verificar la cuenta conectada.");
-  if (existing.data && existing.data.seller_id !== String(tokens.user_id))
-    throw Error(
-      "Esta aplicación ya guarda datos de otra cuenta de Mercado Libre. Usá la misma cuenta para renovar la conexión.",
-    );
-  const { error } = await db
-    .from("meli_connections")
-    .upsert({
-      owner_id: id,
-      seller_id: String(tokens.user_id),
-      encrypted_tokens: seal(tokens),
-      updated_at: new Date().toISOString(),
-    });
-  if (error) throw Error("No se pudo guardar la conexión de Mercado Libre.");
+  await sellerProfile(id);
+  let nickname: string | null = null;
+  try { nickname = (await get<{ nickname?: string }>(`/users/${tokens.user_id}`, tokens.access_token)).nickname ?? null; } catch { /* Nickname is optional; OAuth identity is authoritative. */ }
+  const { error } = await admin().rpc("save_meli_account", { p_actor: id, p_seller: String(tokens.user_id), p_tokens: seal(tokens), p_nickname: nickname });
+  if (error) throw Error(error.code === "P0001" ? error.message : "No se pudo guardar la conexión de Mercado Libre.");
 }
-export async function access(id: string) {
-  const { data, error } = await admin()
-    .from("meli_connections")
-    .select("encrypted_tokens")
-    .eq("owner_id", id)
-    .single();
-  if (error || !data) throw Error("Primero conectá Mercado Libre.");
-  let tokens = unseal<Tokens>(data.encrypted_tokens);
-  if (tokens.expires_at < Date.now() + 120000) {
-    tokens = await exchange({
-      grant_type: "refresh_token",
-      refresh_token: tokens.refresh_token,
-    });
-    await saveTokens(id, tokens);
+export async function access(id: string, accountId?: string) {
+  const account = await accountFor(id, accountId);
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const { data, error } = await admin().from("meli_accounts").select("encrypted_tokens").eq("id", account.id).eq("owner_id", id).single();
+    if (error || !data) throw Error("No se pudo leer la cuenta conectada.");
+    const tokens = unseal<Tokens>(data.encrypted_tokens);
+    if (String(tokens.user_id) !== account.seller_id) throw Error("La identidad de la cuenta no coincide.");
+    if (tokens.expires_at >= Date.now() + 120000) return tokens;
+    const lease = randomUUID();
+    const locked = await admin().rpc("lease_meli_refresh", { p_actor: id, p_account: account.id, p_lease: lease, p_expected: data.encrypted_tokens });
+    if (locked.error) throw Error("No se pudo renovar la conexión.");
+    if (!locked.data) { await new Promise((resolve) => setTimeout(resolve, 1000)); continue; }
+    try {
+      const refreshed = await exchange({ grant_type: "refresh_token", refresh_token: tokens.refresh_token });
+      if (String(refreshed.user_id) !== account.seller_id) throw Error("Identidad inválida al renovar.");
+      const saved = await admin().rpc("finish_meli_refresh", { p_actor: id, p_account: account.id, p_lease: lease, p_tokens: seal(refreshed) });
+      if (saved.error || !saved.data) throw Error("No se guardó la renovación. Volvé a conectar la cuenta.");
+      return refreshed;
+    } catch (e) {
+      await admin().rpc("finish_meli_refresh", { p_actor: id, p_account: account.id, p_lease: lease, p_tokens: null });
+      throw e;
+    }
   }
-  return tokens;
+  throw Error("Hay otra renovación en curso. Volvé a intentar.");
 }
 export async function get<T>(path: string, token: string): Promise<T> {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -117,8 +112,8 @@ export type RawOrder = {
   }[];
 };
 
-export async function verifiedOrder(user: string, id: string): Promise<Order> {
-  const tokens = await access(user);
+export async function verifiedOrder(user: string, id: string, accountId?: string): Promise<Order> {
+  const tokens = await access(user, accountId);
   const raw = await get<RawOrder>(`/orders/${encodeURIComponent(id)}`, tokens.access_token);
   if (String(raw.id) !== id || raw.seller?.id !== tokens.user_id) throw Error("La venta no pertenece a la cuenta conectada.");
   let mode: Order["mode"] = "acordar";
@@ -131,11 +126,11 @@ export async function verifiedOrder(user: string, id: string): Promise<Order> {
 type Search = { results: RawOrder[]; paging: { total: number } };
 // Only one sync per account in this Node process. Database writes are separately atomic.
 const running = new Set<string>();
-export async function importOrders(user: string, previous: State, queryDate?: string) {
+export async function importOrders(user: string, previous: State, queryDate?: string, accountId?: string) {
   if (running.has(user)) throw Error("Ya hay una actualización en curso.");
   running.add(user);
   try {
-    const tokens = await access(user);
+    const tokens = await access(user, accountId);
     const raw = new Map<string, RawOrder>();
     const from = new Date((queryDate ? Date.parse(`${queryDate}T00:00:00-03:00`) : Date.now()) - 90 * 86400000).toISOString();
     const until = queryDate ? `&order.date_created.to=${encodeURIComponent(`${queryDate}T23:59:59.999-03:00`)}` : "";

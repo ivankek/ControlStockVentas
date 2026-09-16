@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { localDate, today, type Order, type State } from "./domain";
 
-export type OrderNote = { dispatchedDate?: string; shippingCents?: number; netCents?: number; updatedAt: string };
+export type OrderNote = { accountId?: string; dispatchedDate?: string; shippingCents?: number; netCents?: number; updatedAt: string };
 export type Business = {
   notes: Record<string, OrderNote>;
   zones: { id: string; name: string; province: string; cities: string[]; rates: { from: string; cents: number }[] }[];

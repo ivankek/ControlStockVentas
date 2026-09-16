@@ -1,8 +1,8 @@
 import { access, get } from "./meli";
 import { normalizeListing, type Listing } from "./listings";
 
-export async function fetchListings(owner: string): Promise<Listing[]> {
-  const tokens = await access(owner);
+export async function fetchListings(owner: string, accountId?: string): Promise<Listing[]> {
+  const tokens = await access(owner, accountId);
   const ids = new Set<string>();
   let scroll: string | undefined;
   // Complete discovery before fetching detail, so the scan cursor does not expire.

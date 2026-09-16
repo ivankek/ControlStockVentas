@@ -1,3 +1,4 @@
+import { inventoryReadMock } from "./inventory-fixture";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { POST, GET } from "../app/api/listings/route";
@@ -18,14 +19,16 @@ test("publicaciones: persistencia por ID, cero escrituras si no hay cambios, err
   let failDetail = false;
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
+    const inventory = inventoryReadMock(url, encrypted, version); if (inventory) return inventory;
     if (url.pathname === "/auth/v1/user") return Response.json({ id: "owner" });
     if (url.pathname === "/rest/v1/meli_connections") return Response.json({ encrypted_tokens: encrypted });
     if (url.pathname === "/rest/v1/account_states") return Response.json({ state, version });
-    if (url.pathname === "/rest/v1/rpc/save_account_state") {
+    if (url.pathname === "/rest/v1/meli_listings") return Response.json((state.listings ?? []).map((payload) => ({ payload })));
+    if (url.pathname === "/rest/v1/rpc/save_meli_catalog") {
       const body = JSON.parse(String(init?.body));
-      assert.equal(body.p_owner, "owner");
+      assert.equal(body.p_actor, "owner");
       assert.equal(body.p_expected, version);
-      state = body.p_state; writes++; version++;
+      state = { ...state, listings: mergeListings(state.listings ?? [], body.p_items).listings }; writes++; version++;
       return Response.json(true);
     }
     assert.equal((init?.method ?? "GET").toUpperCase(), "GET", "Nunca modifica publicaciones en Mercado Libre");

@@ -1,4 +1,5 @@
 "use client";
+import { useAccountPath } from "./inventory-context";
 import { useEffect, useRef, useState } from "react";
 import { today, money } from "@/lib/domain";
 import type { Order } from "@/lib/domain";
@@ -26,6 +27,7 @@ function statusColor(status?: string) {
   return "neutral";
 }
 export default function DispatchQuery({ token }: { token?: string }) {
+  const accountPath = useAccountPath();
   const [date, setDate] = useState(today);
   const [result, setResult] = useState<DispatchQueryResult>();
   const [busy, setBusy] = useState(false);
@@ -45,7 +47,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
     controller.current = request;
     setBusy(true); setError(""); setResult(undefined);
     try {
-      const response = await fetch("/api/sync", {
+      const response = await fetch(accountPath("/api/sync"), {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ date }), signal: request.signal,
       });

@@ -14,8 +14,8 @@ async function paymentNet(id: number, seller: number, token: string): Promise<nu
     return amountCents(data.transaction_details?.net_received_amount);
   }
 }
-export async function salesPage(user: string, from: string, to: string, offset: number) {
-  const tokens = await access(user);
+export async function salesPage(user: string, from: string, to: string, offset: number, accountId?: string) {
+  const tokens = await access(user, accountId);
   const page = await get<{ results: RawOrder[]; paging: { total: number } }>(`/orders/search?seller=${tokens.user_id}&order.date_created.from=${encodeURIComponent(from + "T00:00:00-03:00")}&order.date_created.to=${encodeURIComponent(to + "T23:59:59.999-03:00")}&sort=date_asc&offset=${offset}&limit=50`, tokens.access_token);
   if (!Array.isArray(page.results) || !Number.isInteger(page.paging?.total) || page.paging.total < 0 || (!page.results.length && offset < page.paging.total)) throw Error("La consulta de ventas quedó incompleta.");
   if (page.paging.total > 10000) return { splitRequired: true, sales: [], total: page.paging.total, nextOffset: null };

@@ -1,45 +1,41 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { costAt, money, today, type Product } from "@/lib/domain";
-export default function Suppliers({ token }: { token?: string }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [id, setId] = useState("");
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [date, setDate] = useState(today);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const active = useRef<AbortController | null>(null);
-  useEffect(() => { setProducts([]); setId(""); setName(""); setPrice(""); if (token) void request(); return () => active.current?.abort(); }, [token]);
-  async function request(action?: unknown) {
-    if (!token) return;
-    active.current?.abort(); const controller = new AbortController(); active.current = controller;
-    setBusy(true); setMessage("");
-    try {
-      const res = await fetch("/api/suppliers", { method: action ? "POST" : "GET", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: action ? JSON.stringify(action) : undefined, signal: controller.signal });
-      const data = await res.json(); if (!res.ok) throw Error(data.error || "No se pudo guardar.");
-      if (controller.signal.aborted) return;
-      setProducts(data.products);
-      if (action) { setId(""); setName(""); setPrice(""); setMessage("Producto y costo guardados. Asociá sus publicaciones en Publicaciones."); }
-    } catch (e) { if (!controller.signal.aborted) setMessage((e as Error).message); }
-    finally { if (!controller.signal.aborted) setBusy(false); }
-  }
-  return <>
-    <p className="table-note">Cargá el costo en pesos argentinos de una unidad del proveedor y desde qué fecha rige. Podés asociar varias opciones de venta al mismo producto en Publicaciones.</p>
+import { useState } from "react";
+import { costAt, money, today } from "@/lib/domain";
+import { canManageSupplier, type StockVariant } from "@/lib/inventory";
+import { useInventory } from "./inventory-context";
+export default function Suppliers() {
+  const { data, command } = useInventory();
+  const [editing, setEditing] = useState<StockVariant>();
+  const [addingVariant, setAddingVariant] = useState(false);
+  const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  if (!data) return <p className="notice">Iniciá sesión para consultar productos y costos.</p>;
+  const allowed = data.people.filter((p) => p.role === "SUPPLIER" && canManageSupplier(data.profile, p.id));
+  const person = (id: string) => data.people.find((p) => p.id === id)?.display_name ?? id;
+  return <div className="inventory-view">
+    <p className="table-note">El proveedor administra su catálogo y los costos vigentes por variante. Los vendedores pueden consultar los productos autorizados y asociarlos a sus publicaciones.</p>
+    {data.legacy.some((l) => !l.assigned_supplier_id) && <p className="warning">Hay un catálogo anterior pendiente de asignación. El administrador debe asignarlo a un SUPPLIER desde Usuarios. Sus costos siguen disponibles para las consultas anteriores.</p>}
     {message && <p className="notice" role="status">{message}</p>}
-    <form className="panel supplier-form" onSubmit={(e) => { e.preventDefault(); void request({ type: "product", id: id || crypto.randomUUID(), name, date, cents: Math.round(Number(price) * 100) }); }}>
-      <h2>{id ? "Actualizar producto y costo" : "Nuevo producto del proveedor"}</h2>
-      <label>Nombre<input required maxLength={200} value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <label>Costo por unidad (ARS)<input required type="number" min="0.01" max="1000000000" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} /></label>
-      <label>Vigente desde<input required type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-      <button className="primary" disabled={!token || busy}>{busy ? "Guardando…" : "Guardar producto y costo"}</button>
-      {id && <button type="button" onClick={() => { setId(""); setName(""); setPrice(""); }}>Cancelar edición</button>}
-    </form>
-    <section className="panel pending"><div className="panel-title"><h2>Productos del proveedor</h2><span>{products.length}</span></div>
-      {products.map((p) => <div className="pending-row" key={p.id}><div className="order-text"><strong>{p.name}</strong><p>Costo vigente: {costAt(p, today()) === undefined ? "Sin costo para hoy" : money(costAt(p, today())!)}</p>
-        <details><summary>Historial de costos</summary>{p.costs.map((c) => <p key={c.from}>{c.from} · {money(c.cents)}</p>)}</details>
-      </div><button disabled={busy} onClick={() => { setId(p.id); setName(p.name); setPrice(String((costAt(p, today()) ?? p.costs.at(-1)?.cents ?? 0) / 100)); setDate(today()); }}>Editar / cambiar costo</button></div>)}
-      {!products.length && <p className="empty">Creá tu primer producto del proveedor.</p>}
+    {!!allowed.length && <form key={`${editing?.id ?? "new"}:${addingVariant}`} className="panel stock-card inventory-form" onSubmit={async (e) => {
+      e.preventDefault(); const f = new FormData(e.currentTarget); setBusy(true); setMessage("");
+      try {
+        await command({ type: "product", supplierId: f.get("supplier"), productId: editing?.product_id, variantId: addingVariant ? undefined : editing?.id, name: f.get("name"), variantName: f.get("variant"), sku: f.get("sku"), date: f.get("date"), cents: Math.round(Number(f.get("cost")) * 100) });
+        setEditing(undefined); setAddingVariant(false); setMessage("Producto, variante y costo guardados.");
+      } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
+    }}>
+      <h2>{addingVariant ? "Agregar variante al producto" : editing ? "Editar producto y costo" : "Nuevo producto"}</h2>
+      <label>Proveedor<select name="supplier" required defaultValue={editing?.supplier_id ?? (allowed.length === 1 ? allowed[0].id : "")}><option value="">Seleccionar</option>{allowed.map((p) => <option value={p.id} key={p.id}>{p.display_name}</option>)}</select></label>
+      <label>Producto<input name="name" maxLength={200} defaultValue={editing?.product_name} required /></label>
+      <label>Variante<input name="variant" maxLength={100} defaultValue={addingVariant ? "" : editing?.name ?? "Única"} required /><small>Dejá “Única” si el producto no tiene variantes.</small></label>
+      <label>SKU (opcional)<input name="sku" maxLength={100} defaultValue={addingVariant ? "" : editing?.sku ?? ""} /></label>
+      <label>Costo unitario ARS<input name="cost" type="number" min={0} max={1000000000} step="0.01" required defaultValue={editing ? (costAt({ ...editing, name: editing.product_name }, today()) ?? 0) / 100 : undefined} /></label>
+      <label>Vigente desde<input name="date" type="date" required defaultValue={today()} /></label>
+      <button className="primary" disabled={busy}>Guardar producto y costo</button>{editing && <button type="button" onClick={() => { setEditing(undefined); setAddingVariant(false); }}>Cancelar edición</button>}
+    </form>}
+    <section className="panel"><div className="panel-title"><h2>Productos y variantes del proveedor</h2><span>{data.variants.length} variantes</span></div>
+      {data.variants.map((v) => <div className="pending-row" key={v.id}><div className="order-text"><strong>{v.product_name}{v.name !== "Única" ? ` · ${v.name}` : ""}</strong><p>{person(v.supplier_id)}{v.sku ? ` · ${v.sku}` : ""}</p><p>Costo vigente: {costAt(v, today()) === undefined ? "Sin costo" : money(costAt(v, today())!)}</p><details><summary>Historial de costos</summary>{v.costs.map((c) => <p key={c.from}>{c.from} · {money(c.cents)}</p>)}</details></div>
+        {canManageSupplier(data.profile, v.supplier_id) && <div className="inventory-inline"><button onClick={() => { setEditing(v); setAddingVariant(false); document.querySelector(".content")?.scrollTo({ top: 0 }); }}>Editar costo / producto</button><button onClick={() => { setEditing(v); setAddingVariant(true); document.querySelector(".content")?.scrollTo({ top: 0 }); }}>Agregar variante</button></div>}
+      </div>)}
+      {!data.variants.length && <p className="empty">Todavía no hay productos autorizados.</p>}
     </section>
-  </>;
+  </div>;
 }

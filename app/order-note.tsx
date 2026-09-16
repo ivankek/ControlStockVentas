@@ -1,8 +1,10 @@
 "use client";
+import { useAccountPath } from "./inventory-context";
 import { useState } from "react";
 import { localDate, today, type Order } from "@/lib/domain";
 import type { OrderNote } from "@/lib/business";
 export default function OrderNoteEditor({ order, note, token, onSaved, financial = false }: { order: Order; note?: OrderNote; token?: string; onSaved: () => void; financial?: boolean }) {
+  const accountPath = useAccountPath();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -14,7 +16,7 @@ export default function OrderNoteEditor({ order, note, token, onSaved, financial
       const amount = (key: string) => data.get(key) === "" ? null : Math.round(Number(data.get(key)) * 100);
       setBusy(true); setError("");
       try {
-        const response = await fetch("/api/business", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ type: "note", id: order.id, ...(order.mode === "acordar" ? { ...(financial ? {} : { dispatchedDate: dispatched ? data.get("date") : null }), shippingCents: amount("shipping") } : {}), ...(financial ? { netCents: amount("net") } : {}) }) });
+        const response = await fetch(accountPath("/api/business"), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ type: "note", id: order.id, ...(order.mode === "acordar" ? { ...(financial ? {} : { dispatchedDate: dispatched ? data.get("date") : null }), shippingCents: amount("shipping") } : {}), ...(financial ? { netCents: amount("net") } : {}) }) });
         const result = await response.json(); if (!response.ok) throw Error(result.error);
         setOpen(false); onSaved();
       } catch (e) { setError((e as Error).message); }

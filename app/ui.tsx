@@ -1,4 +1,8 @@
 "use client";
+import Stock from "./stock";
+import Users from "./users";
+import { InventoryContext } from "./inventory-context";
+import type { InventorySnapshot } from "@/lib/inventory";
 import DispatchQuery from "./dispatch-query";
 import Listings from "./listings";
 import Suppliers from "./suppliers";
@@ -8,6 +12,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   Package,
+  Boxes,
+  UsersRound,
   Truck,
   Wallet,
   Receipt,
@@ -44,6 +50,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
   const [message, setMessage] = useState("");
   const [demo, setDemo] = useState(!configured);
   const [token, setToken] = useState<string>();
+  const [inventory, setInventory] = useState<InventorySnapshot>();
+  const [account, setAccount] = useState("");
   const [connected, setConnected] = useState(false);
   const [loaded, setLoaded] = useState(!configured);
   const [busy, setBusy] = useState(false);
@@ -103,6 +111,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
       const data = await api("/api/state", undefined, access);
       if (liveToken.current !== access) return;
       setState(data.state);
+      setInventory(data.inventory);
+      setAccount((current) => data.inventory.accounts.some((a: { id: string; owner_id: string }) => a.id === current && a.owner_id === data.inventory.profile.id) ? current : data.inventory.accounts.find((a: { owner_id: string }) => a.owner_id === data.inventory.profile.id)?.id ?? "");
       setConnected(data.connected);
       setLoaded(true);
     } catch (e) {
@@ -124,6 +134,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
         setDemo(false);
         setLoaded(false);
         setConnected(false);
+        setInventory(undefined); setAccount("");
         setTab("Conexión");
       }
     });
@@ -263,7 +274,13 @@ export default function Dashboard({ configured }: { configured: boolean }) {
           `${state.products.find((p) => p.id === l.productId)?.name ?? l.productId} × ${l.quantity}`,
       )
       .join(" · ");
+  async function inventoryCommand(action?: unknown) {
+    const data = await api("/api/inventory", action);
+    if (liveToken.current === token) setInventory(data);
+  }
+  const ownAccounts = inventory?.accounts.filter((a) => a.owner_id === inventory.profile.id) ?? [];
   return (
+    <InventoryContext.Provider value={{ data: inventory, account, setAccount, command: inventoryCommand }}>
     <div className="shell">
       <aside>
         <div className="brand">
@@ -280,10 +297,12 @@ export default function Dashboard({ configured }: { configured: boolean }) {
             { name: "Despachos", icon: Truck },
             { name: "Publicaciones", icon: Package },
             { name: "Costos", icon: Tag },
+            { name: "Stock", icon: Boxes },
+            ...(inventory?.profile.role === "ADMIN" ? [{ name: "Usuarios", icon: UsersRound }] : []),
             { name: "Gastos del negocio", icon: Receipt },
             { name: "Ganancias", icon: Wallet },
             { name: "Conexión", icon: Link2 },
-          ].map(({ name, icon: Icon }) => (
+          ].filter(({ name }) => inventory?.profile.role !== "SUPPLIER" || ["Costos", "Stock", "Conexión"].includes(name)).map(({ name, icon: Icon }) => (
             <button
               className={tab === name ? "active" : ""}
               aria-current={tab === name ? "page" : undefined}
@@ -342,6 +361,10 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                     ? "Importá y actualizá el catálogo de tu cuenta de Mercado Libre."
                   : tab === "Costos"
                     ? "El precio que te cobra tu proveedor por cada unidad vendida."
+                  : tab === "Stock"
+                    ? "Inventario físico del proveedor, reservas y cantidades por publicación."
+                  : tab === "Usuarios"
+                    ? "Roles y relaciones entre proveedores y vendedores."
                   : tab === "Gastos del negocio"
                     ? "Envíos, monotributo y cargos mensuales adicionales."
                   : tab === "Ganancias"
@@ -379,10 +402,13 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               </button>
             </div>
           )}
-          {tab === "Publicaciones" && <Listings token={token} />}
+          {inventory && ["Despachos", "Publicaciones", "Ganancias"].includes(tab) && <div className="toolbar"><label>Cuenta Mercado Libre<select aria-label="Cuenta Mercado Libre" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">Seleccionar cuenta</option>{ownAccounts.map((a) => <option value={a.id} key={a.id}>{a.nickname ?? "Cuenta ML"} · {a.seller_id}</option>)}</select></label>{!ownAccounts.length && <span>Conectá una cuenta desde Conexión.</span>}</div>}
+          {tab === "Stock" && <Stock />}
+          {tab === "Usuarios" && <Users />}
+          {tab === "Publicaciones" && <Listings key={account} token={account ? token : undefined} />}
           {tab === "Gastos del negocio" && <BusinessCosts token={token} />}
-          {tab === "Ganancias" && <Profits token={token} />}
-          {tab === "Despachos" && !demo && <DispatchQuery token={token} />}
+          {tab === "Ganancias" && <Profits key={account} token={account ? token : undefined} />}
+          {tab === "Despachos" && !demo && <DispatchQuery key={account} token={account ? token : undefined} />}
           {tab === "Despachos" && demo && (
             <>
               <div className="toolbar">
@@ -637,7 +663,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               </section>
             </>
           )}
-          {tab === "Costos" && !demo && <Suppliers token={token} />}
+          {tab === "Costos" && !demo && <Suppliers />}
           {tab === "Costos" && demo && (
             <>
               <section className="panel">
@@ -880,7 +906,9 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                     </p>
                   </form>
                 )}
+                {inventory?.profile.role === "SUPPLIER" ? <p>Perfil proveedor: administrá tus productos en Costos y tu inventario en Stock.</p> : <>
                 <h3>2. Mercado Libre</h3>
+                {ownAccounts.map((a) => <div className="account-card" key={a.id}><strong>{a.nickname ?? "Cuenta Mercado Libre"}</strong><p>Conectada · Seller ID: {a.seller_id}</p><small>Renová iniciando la autorización con esa misma cuenta.</small></div>)}
                 <p>
                   {connected
                     ? "Tu cuenta está conectada. La importación consulta ventas y envíos; no modifica publicaciones."
@@ -896,7 +924,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                     })
                   }
                 >
-                  {connected ? "Renovar conexión" : "Conectar Mercado Libre"}
+                  {connected ? "Conectar otra cuenta / renovar" : "Conectar Mercado Libre"}
                   <ArrowUpRight size={16} />
                 </button>
                 <h3>3. Costos del proveedor</h3>
@@ -909,6 +937,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                 >
                   Ir a mis despachos
                 </button>
+                </>}
                 {!token && (
                   <button
                     onClick={() => {
@@ -1016,5 +1045,6 @@ export default function Dashboard({ configured }: { configured: boolean }) {
         )}
       </dialog>
     </div>
+    </InventoryContext.Provider>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { useAccountPath } from "./inventory-context";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { emptyState, money, today, type State } from "@/lib/domain";
 import { emptyBusiness } from "@/lib/business";
@@ -17,6 +18,7 @@ function period(mode: string, selected: string) {
   return { from, to: to > now ? now : to };
 }
 export default function Profits({ token }: { token?: string }) {
+  const accountPath = useAccountPath();
   const [mode, setMode] = useState("Histórico");
   const [date, setDate] = useState(today);
   const [net, setNet] = useState(false);
@@ -29,7 +31,7 @@ export default function Profits({ token }: { token?: string }) {
   async function refreshCosts() {
     if (!token) return;
     try {
-      const response = await fetch("/api/business", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      const response = await fetch(accountPath("/api/business"), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
       const business = await response.json(); if (!response.ok) throw Error(business.error);
       setResult((current) => current ? { ...current, state: { ...current.state, business } } : current);
     } catch (e) { setError((e as Error).message); }
@@ -41,7 +43,7 @@ export default function Profits({ token }: { token?: string }) {
     setBusy(true); setError(""); setResult(undefined);
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
     async function json(url: string, body?: unknown) {
-      const response = await fetch(url, { headers, method: body ? "POST" : "GET", body: body ? JSON.stringify(body) : undefined, signal: request.signal, cache: "no-store" });
+      const response = await fetch(accountPath(url), { headers, method: body ? "POST" : "GET", body: body ? JSON.stringify(body) : undefined, signal: request.signal, cache: "no-store" });
       const data = await response.json(); if (!response.ok) throw Error(data.error || "No se pudo completar la consulta."); return data;
     }
     try {

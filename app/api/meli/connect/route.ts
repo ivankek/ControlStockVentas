@@ -2,9 +2,11 @@ import { randomBytes, createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { owner, required, fail } from "@/lib/server";
 import { seal } from "@/lib/crypto";
+import { sellerProfile } from "@/lib/inventory-server";
 export async function POST(request: Request) {
   try {
     const user = await owner(request);
+    await sellerProfile(user);
     const state = randomBytes(24).toString("base64url");
     const verifier = randomBytes(48).toString("base64url");
     const origin = required("APP_URL");
