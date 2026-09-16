@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const user = await owner(request);
     const { from, to, offset } = schema.parse(await request.json());
-    if (from > to || to > today() || Date.parse(to) - Date.parse(from) > 31 * 86400000) throw Error("Revisá el período de consulta (hasta 31 días por tramo).");
+    if (from > to || to > today() || Date.parse(to) - Date.parse(from) > 366 * 86400000) throw Error("Revisá el período de consulta (hasta un año).");
     return Response.json(await salesPage(user, from, to, offset), { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return fail(error); }
 }

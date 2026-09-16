@@ -10,6 +10,7 @@ import {
   Package,
   Truck,
   Wallet,
+  Receipt,
   Tag,
   ArrowUpRight,
   RefreshCw,
@@ -279,16 +280,15 @@ export default function Dashboard({ configured }: { configured: boolean }) {
             { name: "Despachos", icon: Truck },
             { name: "Publicaciones", icon: Package },
             { name: "Costos", icon: Tag },
-            { name: "Gastos del negocio", icon: Wallet },
+            { name: "Gastos del negocio", icon: Receipt },
             { name: "Ganancias", icon: Wallet },
-            { name: "Liquidaciones", icon: Wallet },
             { name: "Conexión", icon: Link2 },
           ].map(({ name, icon: Icon }) => (
             <button
               className={tab === name ? "active" : ""}
               aria-current={tab === name ? "page" : undefined}
               key={name}
-              onClick={() => setTab(name)}
+              onClick={() => { setTab(name); document.querySelector(".content")?.scrollTo({ top: 0 }); }}
             >
               <Icon size={19} />
               {name}
@@ -343,7 +343,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                   : tab === "Costos"
                     ? "El precio que te cobra tu proveedor por cada unidad vendida."
                   : tab === "Gastos del negocio"
-                    ? "Tarifas Flex por zona, monotributo y cargos mensuales adicionales."
+                    ? "Envíos, monotributo y cargos mensuales adicionales."
                   : tab === "Ganancias"
                     ? "Tus ventas y el resultado del negocio, por período."
                     : tab === "Liquidaciones"

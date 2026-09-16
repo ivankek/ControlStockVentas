@@ -18,7 +18,7 @@ export async function salesPage(user: string, from: string, to: string, offset: 
   const tokens = await access(user);
   const page = await get<{ results: RawOrder[]; paging: { total: number } }>(`/orders/search?seller=${tokens.user_id}&order.date_created.from=${encodeURIComponent(from + "T00:00:00-03:00")}&order.date_created.to=${encodeURIComponent(to + "T23:59:59.999-03:00")}&sort=date_asc&offset=${offset}&limit=50`, tokens.access_token);
   if (!Array.isArray(page.results) || !Number.isInteger(page.paging?.total) || page.paging.total < 0 || (!page.results.length && offset < page.paging.total)) throw Error("La consulta de ventas quedó incompleta.");
-  if (page.paging.total > 10000) throw Error("Hay más de 10.000 ventas en este tramo. Consultá un período menor.");
+  if (page.paging.total > 10000) return { splitRequired: true, sales: [], total: page.paging.total, nextOffset: null };
   const sales: Sale[] = [];
   const shipments = new Map<string, Promise<Shipment>>();
   const payments = new Map<number, Promise<number | undefined>>();

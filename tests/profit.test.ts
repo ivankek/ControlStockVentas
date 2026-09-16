@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { emptyState } from "../lib/domain";
 import { businessCommand, emptyBusiness, flexCost, manualDispatches, updateBusiness } from "../lib/business";
-import { monthlyExpenses, profitRows, reportTotals, type Sale } from "../lib/profit";
+import { monthlyExpenses, expenseBreakdown, profitRows, reportTotals, type Sale } from "../lib/profit";
 
 const sale = (overrides: Partial<Sale> = {}): Sale => ({ id: "100", createdAt: "2026-09-10T15:00:00Z", mode: "correo", cancelled: false, orderStatus: "paid", grossCents: 10000, receivedCents: 8000, paymentIds: ["1"], issues: [], lines: [{ productId: "MLA1:0", quantity: 2 }], ...overrides });
 const state = () => ({ ...emptyState(), supplierProducts: [{ id: "p", name: "Producto", costs: [{ from: "2026-01-01", cents: 1000 }] }], supplierLinks: { "MLA1:0": { supplierId: "p", units: 2 } }, business: emptyBusiness() });
@@ -42,9 +42,11 @@ test("neto resta costo por unidades y logística propia una vez, sin volver a re
   const rows = profitRows(s, orders);
   assert.equal(rows[0].gross, 10000);
   assert.equal(rows[0].supplier, 4000);
-  assert.equal(rows[0].net, 3000);
+  assert.equal(rows[0].shipping, 500000);
+  assert.equal(rows[0].net, -496000);
   assert.equal(rows[1].net, 4000);
   assert.equal(profitRows(s, [sale()])[0].net, 4000);
+  assert.equal(profitRows(s, [sale({ mode: "flex" })])[0].shipping, 500000, "Flex sin localidad también usa la tarifa provisoria");
 });
 
 test("importes faltantes, reembolsos y pagos compartidos no se convierten en ganancia", () => {
@@ -67,5 +69,8 @@ test("gastos mensuales prorrateados reconcilian centavos entre meses y año bisi
   assert.equal(sum, 12001);
   assert.equal(monthlyExpenses(b, "2024-02-01", "2024-03-31").total, 15101);
   assert.deepEqual(reportTotals([], b, "2024-01-31", "2024-02-01").missingMonths, ["2024-01"]);
+  const parts = expenseBreakdown(b, "2024-02-28", "2024-03-03");
+  assert.deepEqual(parts.map((part) => [part.days, part.daysInMonth]), [[2, 29], [3, 31]]);
+  assert.equal(parts.reduce((sum, part) => sum + part.total, 0), monthlyExpenses(b, "2024-02-28", "2024-03-03").total);
   assert.equal(businessCommand.safeParse({ type: "month", month: "2026-13", taxCents: 0, billingCents: 0 }).success, false);
 });

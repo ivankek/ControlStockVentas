@@ -27,7 +27,8 @@ test("ganancias consulta API ML y MP sin persistir ventas; notas verifican propi
   const data = await response.json(); assert.equal(data.sales[0].grossCents, 10000); assert.equal(data.sales[0].receivedCents, 8000); assert.equal(data.nextOffset, null);
   unauthorized = true;
   assert.equal((await (await POST(request({ from: "2026-09-10", to: "2026-09-10" }))).json()).sales[0].receivedCents, undefined);
-  assert.equal((await POST(request({ from: "2026-01-01", to: "2026-09-10" }))).status, 400);
+  assert.equal((await POST(request({ from: "2026-01-01", to: "2026-09-10" }))).status, 200);
+  assert.equal((await POST(request({ from: "2024-01-01", to: "2026-09-10" }))).status, 400);
   const rejected = await save(request({ type: "note", id: "999", shippingCents: 100 }));
   assert.equal(rejected.status, 400); assert.match((await rejected.json()).error, /no pertenece/);
 });

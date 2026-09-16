@@ -5,7 +5,7 @@
 Se reutiliza `account_states.state.business` (sin migraciones ni variables nuevas):
 
 - `notes[orderId]`: fecha de despacho manual, costo del envío acordado, neto recibido verificado opcional y fecha de modificación.
-- `zones[]`: provincia, localidades y tarifas Flex con fecha de vigencia.
+- `zones[]`: tarifas anteriores conservadas; temporalmente no se usan en el cálculo.
 - `months[YYYY-MM]`: monotributo y cargos adicionales de la factura ML.
 
 Los pedidos y pagos consultados siguen siendo temporales. No se guardan en Supabase.
@@ -27,9 +27,9 @@ Bruto significa total vendido, según lo solicitado: `total_amount` en ARS de
 Neto estimado por venta = importe recibido − proveedor − envío propio.
 Proveedor utiliza la asociación actual y el costo vigente en la fecha de venta,
 con su multiplicador de unidades. Una edición retroactiva cambia el cálculo.
-Flex busca una única coincidencia de provincia/localidad; permite variaciones
-de mayúsculas, tildes y espacios, pero no inventa equivalencias geográficas.
-Se usa la tarifa vigente en la fecha de venta. Un shipment compartido se cobra
+Flex usa una tarifa provisoria de $5.000 por envío, para todas las zonas y períodos.
+La configuración por zonas queda pospuesta y se conservan los datos anteriores.
+Un shipment compartido se cobra
 una vez entre las órdenes consultadas, asignándolo a la primera por ID.
 Si un carrito está dividido entre períodos, debe revisarse esa asignación.
 Correo no recibe otra deducción de envío. Los envíos acordados usan el costo
@@ -63,9 +63,10 @@ meses de acceso a órdenes. No se puede reconstruir un histórico de toda la vid
 sin otra fuente o almacenamiento histórico autorizado. La búsqueda del vendedor
 también puede omitir cancelaciones, por lo que no reemplaza una conciliación.
 
-El navegador consulta tramos de siete días, páginas de 50, hasta completar el
-período, deduplicando por ID y rechazando páginas repetidas o totales cambiantes.
-`POST /api/profit` acepta hasta 31 días por tramo y 10.000 resultados. Cada página
+El navegador consulta el período completo, en páginas de 50, deduplicando por ID
+y rechazando páginas repetidas o totales cambiantes. Solo divide las fechas si
+la API informa más de 10.000 resultados; un día que supera ese límite da un error
+explícito en vez de truncarse. `POST /api/profit` acepta hasta un año. Cada página
 consulta envíos/pagos en lotes de cuatro y no consulta historiales de despacho.
 No se muestra un total final si falla una página. Se puede cancelar la consulta.
 El primer histórico puede tardar; resultados se descartan al salir de la sección.
@@ -73,6 +74,13 @@ Si faltan costos/importes o se excede la cobertura, muestra un subtotal parcial
 y el detalle pendiente. No transforma un importe desconocido en cero.
 
 ## Validación y puesta en marcha
+
+La navegación y el encabezado quedan fuera del contenedor desplazable derecho.
+En móvil, el menú horizontal y el encabezado también permanecen visibles.
+El detalle usa fichas con importes que se adaptan al ancho, sin tabla horizontal.
+La sección Liquidaciones se retiró del menú, sin eliminar datos guardados.
+El desplegable de gastos muestra por mes los días incluidos y los importes
+descontados, y la resta se hace una sola vez sobre la suma del neto de las ventas.
 
 - `npm test`: reglas de fechas, propiedad de órdenes, lectura sin persistencia,
   pagos sin acceso, costos por vigencia, unidades, pagos/envíos compartidos y

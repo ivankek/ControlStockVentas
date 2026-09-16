@@ -1,8 +1,9 @@
 import { localDate, type Order, type State } from "./domain";
-import { emptyBusiness, flexCost, type Business } from "./business";
+import { emptyBusiness, type Business } from "./business";
 import { supplierReport } from "./supplier";
 
 export type Sale = Order & { grossCents?: number; receivedCents?: number; paymentIds: string[]; issues: string[] };
+export const DEFAULT_FLEX_CENTS = 500000;
 export function monthlyExpenses(business: Business, from: string, to: string) {
   let tax = 0, billing = 0;
   for (let day = from; day <= to; day = new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10)) {
@@ -14,6 +15,18 @@ export function monthlyExpenses(business: Business, from: string, to: string) {
     tax += share(month.taxCents); billing += share(month.billingCents);
   }
   return { tax, billing, total: tax + billing };
+}
+export function expenseBreakdown(business: Business, from: string, to: string) {
+  const result = [];
+  for (let start = from; start <= to;) {
+    const month = start.slice(0, 7);
+    const [year, m] = month.split("-").map(Number);
+    const daysInMonth = new Date(Date.UTC(year, m, 0)).getUTCDate();
+    const end = `${month}-${daysInMonth}` < to ? `${month}-${daysInMonth}` : to;
+    result.push({ month, days: Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1, daysInMonth, configured: business.months[month], ...monthlyExpenses(business, start, end) });
+    start = new Date(Date.parse(end + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
+  }
+  return result;
 }
 export function profitRows(state: State, sales: Sale[]) {
   const business = state.business ?? emptyBusiness();
@@ -33,9 +46,8 @@ export function profitRows(state: State, sales: Sale[]) {
     let shipping: number | undefined = 0;
     if (sale.mode === "flex") {
       const key = sale.shipmentId ?? sale.id;
-      shipping = shipments.has(key) ? 0 : flexCost(business, sale, date);
+      shipping = shipments.has(key) ? 0 : DEFAULT_FLEX_CENTS;
       shipments.add(key);
-      if (shipping === undefined) issues.push("Zona Flex sin tarifa vigente o con más de una coincidencia");
     } else if (sale.mode === "acordar") {
       shipping = note?.shippingCents;
       if (shipping === undefined) issues.push("Falta costo del envío acordado (ingresá 0 si no tiene costo)");
