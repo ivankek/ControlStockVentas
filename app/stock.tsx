@@ -45,15 +45,19 @@ function StockRow({ variant: v, supplier, mappings, expanded, busy, canEdit, onT
       <td>{v.reserved_stock}</td>
       <td><div className="stock-actions">{canEdit && <button className="primary stock-save" disabled={busy || !changed} onClick={() => void onSave(v, physical)}>Guardar</button>}<button onClick={onToggle}>{expanded ? "Ocultar" : "Publicaciones"} ({mainMappings.length})</button></div></td>
     </tr>
-    {expanded && <tr className="stock-expanded"><td colSpan={5}><strong>Publicación principal asociada</strong>{mappings.length ? primaryMappings(mappings).map((m) => <div className="stock-association" key={`${m.account_id}:${m.item_id}`}><strong>{m.title}</strong><span>{m.item_id}</span><small>{m.nickname ?? "Cuenta ML"} · Stock ML: {m.ml_quantity ?? "No disponible"} · Deseado: {desiredListingQuantity({ mode: m.mode, sellableStock: sellableStock(v.physical_stock, v.reserved_stock), fixedQuantity: m.fixed_quantity })}</small></div>) : <p className="table-note">No hay publicaciones asociadas.</p>}</td></tr>}
+    {expanded && <tr className="stock-expanded"><td colSpan={5}><strong>Publicaciones principales asociadas</strong>{mappings.length ? primaryMappings(mappings).map((m) => <div className="stock-association" key={`${m.account_id}:${m.item_id}`}><strong>{m.title}</strong><span>{m.item_id}</span><small>{m.nickname ?? "Cuenta ML"} · Stock ML: {m.ml_quantity ?? "No disponible"} · Deseado: {desiredListingQuantity({ mode: m.mode, sellableStock: sellableStock(v.physical_stock, v.reserved_stock), fixedQuantity: m.fixed_quantity })}</small></div>) : <p className="table-note">No hay publicaciones asociadas.</p>}</td></tr>}
   </>;
 }
 
 function primaryMappings(mappings: StockMapping[]) {
   const byItem = new Map<string, StockMapping>();
   for (const mapping of mappings) {
-    const current = byItem.get(mapping.item_id);
-    if (!current || mapping.variation_id === "0") byItem.set(mapping.item_id, mapping);
+    // Mercado Libre puede representar las opciones comerciales como varios item_id.
+    // user_product_id identifica el producto principal; si falta, usamos el título.
+    const title = mapping.title.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es-AR");
+    const key = `${mapping.account_id}:${mapping.user_product_id ? `up:${mapping.user_product_id}` : `title:${title}`}`;
+    const current = byItem.get(key);
+    if (!current || mapping.variation_id === "0") byItem.set(key, mapping);
   }
   return [...byItem.values()];
 }
