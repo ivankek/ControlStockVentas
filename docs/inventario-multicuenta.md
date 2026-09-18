@@ -22,9 +22,9 @@ La migración copia la conexión cifrada existente a `meli_accounts` y sus publi
 
 `app_profiles` distingue el usuario de la aplicación (`ADMIN`, `USER`, `SUPPLIER`) del `seller_id` de Mercado Libre. `meli_accounts` permite varias cuentas por ADMIN o USER; `seller_id` es único y los tokens siguen cifrados. `supplier_sellers` guarda la relación explícita proveedor–vendedor.
 
-`supplier_products → supplier_variants → supplier_inventory` representa el stock físico central. La variante sin opciones se llama `Única`. `supplier_costs` conserva el historial por fecha. `listing_mappings` vincula una publicación y variación de una cuenta concreta con una variante física, sus unidades por venta y la política `REAL` o `FIXED`.
+`supplier_products → supplier_variants → supplier_inventory` representa el stock físico central. Cada producto tiene un SKU obligatorio; internamente la variante sin opciones se llama `Única`. `supplier_costs` conserva el historial por fecha. `listing_mappings` vincula una publicación y variación de una cuenta concreta con una variante física, sus unidades por venta y la política `REAL` o `FIXED`.
 
-El stock vendible es `max(físico - reservado - seguridad, 0)`. Los ajustes permitidos por ahora son `MANUAL_ADJUSTMENT`, `RESTOCK` y `CORRECTION`. `inventory_command` bloquea la fila de inventario, valida invariantes, registra el movimiento y actualiza la versión dentro de la misma transacción. Acepta un `request_id` idempotente para reintentos. `SALE`, `CANCELLATION` y `RETURN` están preparados en el historial, pero no se generan todavía.
+El stock disponible es `max(físico - reservado, 0)`. Los ajustes permitidos por ahora son `MANUAL_ADJUSTMENT`, `RESTOCK` y `CORRECTION`. `inventory_command` bloquea la fila de inventario, valida invariantes, registra el movimiento y actualiza la versión dentro de la misma transacción. Acepta un `request_id` idempotente para reintentos. `SALE`, `CANCELLATION` y `RETURN` están preparados en el historial, pero no se generan todavía.
 
 ## Alcance deliberadamente pendiente
 
