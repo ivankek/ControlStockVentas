@@ -24,14 +24,16 @@
 .inventory-confirm input { width: auto; }
 .account-card { padding: 16px; margin: 12px 0; border: 1px solid #dce5e1; border-radius: 10px; }
 .stock-grid-panel { overflow: hidden; }
-.stock-grid { min-width: 900px; table-layout: fixed; }
+.stock-grid { min-width: 760px; table-layout: fixed; }
 .stock-grid th, .stock-grid td { vertical-align: middle; }
 .stock-grid th:nth-child(1), .stock-grid td:nth-child(1) { width: 24%; }
-.stock-grid th:nth-child(2), .stock-grid td:nth-child(2) { width: 13%; }
-.stock-grid th:nth-child(3), .stock-grid td:nth-child(3), .stock-grid th:nth-child(4), .stock-grid td:nth-child(4), .stock-grid th:nth-child(5), .stock-grid td:nth-child(5), .stock-grid th:nth-child(6), .stock-grid td:nth-child(6) { width: 9%; }
-.stock-grid th:last-child, .stock-grid td:last-child { width: 27%; }
+.stock-grid th:nth-child(2), .stock-grid td:nth-child(2) { width: 18%; }
+.stock-grid th:nth-child(3), .stock-grid td:nth-child(3), .stock-grid th:nth-child(4), .stock-grid td:nth-child(4) { width: 13%; }
+.stock-grid th:last-child, .stock-grid td:last-child { width: 32%; }
 .stock-product strong, .stock-product small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stock-product small { margin-top: 4px; }
+.stock-sku { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-sku code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
 .stock-number { width: 78px; padding: 8px 7px; }
 .stock-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .stock-actions button { padding: 8px 10px; font-size: 12px; }
@@ -46,7 +48,7 @@
  .inventory-form { grid-template-columns: minmax(0,1fr); }
  .supplier-binding { min-width: 0; }
  .supplier-binding > * { max-width: 100%; }
- .stock-grid { min-width: 820px; }
+ .stock-grid { min-width: 700px; }
  .stock-expanded .stock-association { grid-template-columns: 1fr; gap: 4px; }
 }
 .pending-row button {

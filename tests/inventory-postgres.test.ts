@@ -62,7 +62,7 @@ test("PostgreSQL real: migración, aislamiento, roles y transacciones concurrent
     await assert.rejects(command(user, { type: "role", userId: user, role: "SUPPLIER" }), /ADMIN/);
     await assert.rejects(command(admin, { type: "role", userId: user, role: "ADMIN" }), /no permitido/);
     await assert.rejects(command(user, { type: "relationship", supplierId: supplier, sellerId: user, active: true }), /ADMIN/);
-    const product = { type: "product", supplierId: supplier, name: "Otro", variantName: "Única", sku: "", date: "2026-09-01", cents: 50 };
+    const product = { type: "product", supplierId: supplier, name: "Otro", variantName: "Única", sku: "OTRO-001", date: "2026-09-01", cents: 50 };
     await assert.rejects(command(user, product), /administrar/);
     await assert.rejects(command(supplier2, product), /administrar/);
     await command(supplier, product);
@@ -96,7 +96,7 @@ test("PostgreSQL real: migración, aislamiento, roles y transacciones concurrent
     assert.equal((await snap(user)).variants.length, 0);
     await command(admin, { type: "relationship", supplierId: supplier, sellerId: user, active: true });
   });
-  const adjustment = (delta: number, expectedVersion: number) => ({ type: "adjust", variantId: variant, delta, reserved: 0, safety: 0, expectedVersion, movementType: "MANUAL_ADJUSTMENT", note: "Prueba manual", requestId: randomUUID() });
+  const adjustment = (delta: number, expectedVersion: number) => ({ type: "adjust", variantId: variant, delta, reserved: 0, expectedVersion, movementType: "MANUAL_ADJUSTMENT", note: "Prueba manual", requestId: randomUUID() });
   await t.test("ajustes autorizados, invariantes, idempotencia, rollback y movimiento", async () => {
     await assert.rejects(command(user, adjustment(2, 0)), /ajustar/);
     await assert.rejects(command(supplier2, adjustment(2, 0)), /ajustar/);
@@ -107,7 +107,6 @@ test("PostgreSQL real: migración, aislamiento, roles y transacciones concurrent
     await assert.rejects(command(supplier, { ...action, delta: 5 }), /reutilizado/);
     await assert.rejects(command(supplier, adjustment(-3, 1)), /check constraint/);
     await assert.rejects(command(supplier, { ...adjustment(0, 1), reserved: 3 }), /check constraint/);
-    await assert.rejects(command(supplier, { ...adjustment(1, 1), safety: -1 }), /check constraint/);
     await assert.rejects(command(supplier, { ...adjustment(1, 1), movementType: "SALE" }), /manuales/);
     assert.equal((await snap(supplier)).movements.length, 1);
     assert.equal((await snap(supplier)).variants.find((v: { id: string }) => v.id === variant).physical_stock, 2);

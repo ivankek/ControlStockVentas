@@ -4,10 +4,10 @@ export type Role = "ADMIN" | "USER" | "SUPPLIER";
 export type AppUser = { id: string; role: Role; display_name: string };
 export type MeliAccount = { id: string; owner_id: string; seller_id: string; nickname: string | null; updated_at: string };
 export const quantity = z.number().int().min(0).max(1000000000);
-export function sellableStock(physical: number, reserved: number, safety: number) {
-  [physical, reserved, safety].forEach((n) => quantity.parse(n));
+export function sellableStock(physical: number, reserved: number) {
+  [physical, reserved].forEach((n) => quantity.parse(n));
   if (reserved > physical) throw Error("La reserva no puede superar el stock físico.");
-  return Math.max(physical - reserved - safety, 0);
+  return Math.max(physical - reserved, 0);
 }
 export function desiredListingQuantity(input: { mode: "REAL" | "FIXED"; sellableStock: number; fixedQuantity?: number | null }) {
   quantity.parse(input.sellableStock);
@@ -22,7 +22,7 @@ export function canManageSupplier(actor: AppUser, supplier: string) {
 export function canConnect(role: Role) { return role === "ADMIN" || role === "USER"; }
 export type StockVariant = {
   id: string; product_id: string; supplier_id: string; product_name: string; name: string; sku: string | null;
-  physical_stock: number; reserved_stock: number; safety_stock: number; version: number;
+  physical_stock: number; reserved_stock: number; version: number;
   costs: { from: string; cents: number }[];
 };
 export type StockMapping = {
@@ -34,7 +34,7 @@ export type StockMapping = {
 export type Movement = {
   id: string; variant_id: string; type: string; quantity_delta: number;
   stock_before: number; stock_after: number; reserved_before: number; reserved_after: number;
-  safety_before: number; safety_after: number; actor_id: string; source: string; note: string | null; created_at: string;
+  actor_id: string; source: string; note: string | null; created_at: string;
 };
 export type InventorySnapshot = {
   profile: AppUser; accounts: MeliAccount[]; people: AppUser[];
@@ -48,6 +48,6 @@ export const inventoryCommand = z.discriminatedUnion("type", [
   z.object({ type: z.literal("relationship"), supplierId: uuid, sellerId: uuid, active: z.boolean() }),
   z.object({ type: z.literal("assignLegacy"), ownerId: uuid, supplierId: uuid }),
   z.object({ type: z.literal("product"), supplierId: uuid, productId: uuid.optional(), variantId: uuid.optional(), name: z.string().trim().min(1).max(200), variantName: z.string().trim().min(1).max(100).default("Única"), sku: z.string().trim().min(1, "El SKU es obligatorio.").max(100), date: z.iso.date(), cents: z.number().int().min(0).max(100000000000) }),
-  z.object({ type: z.literal("adjust"), variantId: uuid, delta: z.number().int().min(-1000000000).max(1000000000), reserved: quantity, safety: quantity, expectedVersion: quantity, movementType: z.enum(["MANUAL_ADJUSTMENT", "RESTOCK", "CORRECTION"]), note: z.string().trim().min(1).max(500), requestId: uuid }),
+  z.object({ type: z.literal("adjust"), variantId: uuid, delta: z.number().int().min(-1000000000).max(1000000000), reserved: quantity, expectedVersion: quantity, movementType: z.enum(["MANUAL_ADJUSTMENT", "RESTOCK", "CORRECTION"]), note: z.string().trim().min(1).max(500), requestId: uuid }),
   z.object({ type: z.literal("mapping"), accountId: uuid, keys: z.array(z.string().regex(/^[A-Z]+\d+:\d+$/)).min(1).max(1000), variantId: uuid.nullable(), units: z.number().int().min(1).max(10000), mode: z.enum(["REAL", "FIXED"]), fixed: quantity.nullable(), preservePolicy: z.boolean().default(false) }),
 ]);

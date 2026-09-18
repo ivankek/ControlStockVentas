@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { canConnect, canManageSupplier, desiredListingQuantity, inventoryCommand, sellableStock } from "../lib/inventory";
 test("inventario físico, reserva y seguridad; REAL/FIXED sin efectos externos", () => {
-  assert.equal(sellableStock(20, 2, 3), 15);
-  assert.equal(sellableStock(3, 0, 3), 0);
-  assert.equal(sellableStock(3, 2, 10), 0);
-  for (const args of [[-1, 0, 0], [1, 2, 0], [1, 0, -1], [1.5, 0, 0], [Infinity, 0, 0]]) assert.throws(() => sellableStock(...args as [number, number, number]));
+  assert.equal(sellableStock(20, 2), 18);
+  assert.equal(sellableStock(3, 0), 3);
+  assert.equal(sellableStock(3, 2), 1);
+  for (const args of [[-1, 0], [1, 2], [1.5, 0], [Infinity, 0]]) assert.throws(() => sellableStock(...args as [number, number]));
   assert.equal(desiredListingQuantity({ mode: "REAL", sellableStock: 15 }), 15);
   assert.equal(desiredListingQuantity({ mode: "FIXED", sellableStock: 15, fixedQuantity: 999 }), 999);
   assert.equal(desiredListingQuantity({ mode: "FIXED", sellableStock: 0, fixedQuantity: 999 }), 0);

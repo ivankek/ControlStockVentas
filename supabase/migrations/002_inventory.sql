@@ -39,16 +39,15 @@ create table public.supplier_costs (
 );
 create table public.supplier_inventory (
  variant_id uuid primary key references supplier_variants(id), physical_stock bigint not null default 0,
- reserved_stock bigint not null default 0, safety_stock bigint not null default 0,
+ reserved_stock bigint not null default 0,
  version bigint not null default 0,
- check(physical_stock between 0 and 1000000000), check(reserved_stock between 0 and physical_stock),
- check(safety_stock between 0 and 1000000000)
+ check(physical_stock between 0 and 1000000000), check(reserved_stock between 0 and physical_stock)
 );
 create table public.inventory_movements (
  id uuid primary key default gen_random_uuid(), variant_id uuid not null references supplier_variants(id),
  type text not null check(type in ('MANUAL_ADJUSTMENT','RESTOCK','CORRECTION','SALE','CANCELLATION','RETURN')),
  quantity_delta bigint not null, stock_before bigint not null, stock_after bigint not null,
- reserved_before bigint not null, reserved_after bigint not null, safety_before bigint not null, safety_after bigint not null,
+ reserved_before bigint not null, reserved_after bigint not null,
  source text not null, external_reference text, note text, actor_id uuid not null references app_profiles(id),
  request_id uuid not null, created_at timestamptz not null default now(), unique(actor_id,request_id),
  check(stock_after = stock_before + quantity_delta)
@@ -125,7 +124,7 @@ end $$;
 create function public.inventory_command(p_actor uuid,p_action jsonb) returns void
 language plpgsql security invoker set search_path=public as $$
 declare r text; t text:=p_action->>'type'; supplier uuid; prod uuid; variant uuid; account uuid;
- target uuid; inv supplier_inventory%rowtype; delta bigint; reserve bigint; safety bigint; key text; item text; variation text; payload jsonb; mv inventory_movements%rowtype;
+ target uuid; inv supplier_inventory%rowtype; delta bigint; reserve bigint; key text; item text; variation text; payload jsonb; mv inventory_movements%rowtype;
 begin
  select role into r from app_profiles where id=p_actor for share;
  if r is null then raise exception 'Perfil inexistente.'; end if;
@@ -176,18 +175,18 @@ begin
   select * into strict inv from supplier_inventory where variant_id=variant for update;
   select * into mv from inventory_movements where actor_id=p_actor and request_id=(p_action->>'requestId')::uuid;
   if found then
-   if mv.variant_id<>variant or mv.quantity_delta<>(p_action->>'delta')::bigint or mv.reserved_after<>(p_action->>'reserved')::bigint or mv.safety_after<>(p_action->>'safety')::bigint or mv.type<>p_action->>'movementType' or mv.note is distinct from p_action->>'note' then raise exception 'Identificador de ajuste reutilizado con otros datos.'; end if;
+  if mv.variant_id<>variant or mv.quantity_delta<>(p_action->>'delta')::bigint or mv.reserved_after<>(p_action->>'reserved')::bigint or mv.type<>p_action->>'movementType' or mv.note is distinct from p_action->>'note' then raise exception 'Identificador de ajuste reutilizado con otros datos.'; end if;
    return;
   end if;
   if inv.version<>(p_action->>'expectedVersion')::bigint then raise exception 'El stock cambió. Actualizá y revisá el ajuste.'; end if;
   if p_action->>'movementType' not in ('MANUAL_ADJUSTMENT','RESTOCK','CORRECTION') then raise exception 'Solo movimientos manuales.'; end if;
-  delta:=(p_action->>'delta')::bigint; reserve:=(p_action->>'reserved')::bigint; safety:=(p_action->>'safety')::bigint;
+  delta:=(p_action->>'delta')::bigint; reserve:=(p_action->>'reserved')::bigint;
   if p_action->>'movementType'='RESTOCK' and delta<=0 then raise exception 'Una reposición debe agregar unidades.'; end if;
   if length(trim(coalesce(p_action->>'note','')))=0 then raise exception 'Explicá el motivo del ajuste.'; end if;
-  if delta=0 and reserve=inv.reserved_stock and safety=inv.safety_stock then raise exception 'No hay cambios de stock.'; end if;
-  update supplier_inventory set physical_stock=physical_stock+delta,reserved_stock=reserve,safety_stock=safety,version=version+1 where variant_id=variant;
-  insert into inventory_movements(variant_id,type,quantity_delta,stock_before,stock_after,reserved_before,reserved_after,safety_before,safety_after,source,note,actor_id,request_id)
-   values(variant,p_action->>'movementType',delta,inv.physical_stock,inv.physical_stock+delta,inv.reserved_stock,reserve,inv.safety_stock,safety,'manual',p_action->>'note',p_actor,(p_action->>'requestId')::uuid);
+  if delta=0 and reserve=inv.reserved_stock then raise exception 'No hay cambios de stock.'; end if;
+  update supplier_inventory set physical_stock=physical_stock+delta,reserved_stock=reserve,version=version+1 where variant_id=variant;
+  insert into inventory_movements(variant_id,type,quantity_delta,stock_before,stock_after,reserved_before,reserved_after,source,note,actor_id,request_id)
+   values(variant,p_action->>'movementType',delta,inv.physical_stock,inv.physical_stock+delta,inv.reserved_stock,reserve,'manual',p_action->>'note',p_actor,(p_action->>'requestId')::uuid);
  elsif t='mapping' then
   account:=(p_action->>'accountId')::uuid; variant:=(p_action->>'variantId')::uuid;
   if not exists(select 1 from meli_accounts where id=account and (owner_id=p_actor or r='ADMIN')) or r='SUPPLIER' then raise exception 'Cuenta ajena o no permitida.'; end if;
@@ -277,7 +276,7 @@ begin
  select role into r from app_profiles where id=p_actor;
  if r is null then raise exception 'Perfil inexistente. Aplicá la migración.'; end if;
  with visible_variants as (
-  select v.id,v.product_id,p.supplier_id,p.name product_name,v.name,v.sku,i.physical_stock,i.reserved_stock,i.safety_stock,i.version,
+  select v.id,v.product_id,p.supplier_id,p.name product_name,v.name,v.sku,i.physical_stock,i.reserved_stock,i.version,
    coalesce((select jsonb_agg(jsonb_build_object('from',c.valid_from,'cents',c.cents) order by c.valid_from) from supplier_costs c where c.variant_id=v.id),'[]') costs
   from supplier_variants v join supplier_products p on p.id=v.product_id join supplier_inventory i on i.variant_id=v.id
   where r='ADMIN' or (r='SUPPLIER' and p.supplier_id=p_actor) or (r='USER' and exists(select 1 from supplier_sellers ss where ss.supplier_id=p.supplier_id and ss.seller_user_id=p_actor and ss.active))

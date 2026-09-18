@@ -30,7 +30,7 @@ export default function ListingBinding({ keys, policyOnly = false }: { keys: str
       <div className="units-control"><span>Unidades por venta: {mixed ? 1 : current?.units_per_sale ?? 1}</span><button type="button" className="units-toggle" onClick={() => setEditUnits(!editUnits)}>Cambiar</button><input aria-label="Unidades del proveedor por venta" name="units" type={editUnits ? "number" : "hidden"} min={1} max={10000} step={1} defaultValue={mixed ? 1 : current?.units_per_sale ?? 1} required /></div>
       {mixed && <small>El grupo tiene asociaciones diferentes. Guardar aplica la selección a estas opciones.</small>}
     </> : <><label>Política de stock<select value={selectedMode} onChange={(e) => setMode(e.target.value)}><option value="REAL">REAL · stock vendible</option><option value="FIXED">FIXED · cantidad fija</option></select></label>{selectedMode === "FIXED" && <label>Cantidad fija<input name="fixed" type="number" min={0} max={1000000000} step={1} defaultValue={current?.fixed_quantity ?? 999} required /></label>}
-      {v && <small>Deseado guardado: {desiredListingQuantity({ mode: current!.mode, fixedQuantity: current!.fixed_quantity, sellableStock: sellableStock(v.physical_stock, v.reserved_stock, v.safety_stock) })} · No se envía a Mercado Libre</small>}
+      {v && <small>Deseado guardado: {desiredListingQuantity({ mode: current!.mode, fixedQuantity: current!.fixed_quantity, sellableStock: sellableStock(v.physical_stock, v.reserved_stock) })} · No se envía a Mercado Libre</small>}
     </>}
     <button disabled={busy || !account}>{policyOnly ? "Guardar política" : "Guardar asociación"}</button>{message && <small role="status">{message}</small>}
   </form>;
