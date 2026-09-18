@@ -31,7 +31,7 @@ create table public.supplier_products (
 );
 create table public.supplier_variants (
  id uuid primary key default gen_random_uuid(), product_id uuid not null references supplier_products(id),
- name text not null default 'Única', sku text, unique(product_id,name)
+ name text not null default 'Única', sku text not null check(length(trim(sku)) between 1 and 100), unique(product_id,name)
 );
 create table public.supplier_costs (
  variant_id uuid not null references supplier_variants(id), valid_from date not null,
@@ -90,7 +90,7 @@ begin
  insert into supplier_sellers values(p_supplier,p_owner,true) on conflict(supplier_id,seller_user_id) do update set active=true;
  for product in select value from jsonb_array_elements(coalesce(s->'supplierProducts','[]')) loop
   insert into supplier_products(supplier_id,name,legacy_owner,legacy_id) values(p_supplier,product->>'name',p_owner,product->>'id') returning id into prod;
-  insert into supplier_variants(product_id) values(prod) returning id into variant;
+  insert into supplier_variants(product_id,sku) values(prod,coalesce(nullif(trim(product->>'sku'),''),'LEGACY-'||left(replace(coalesce(product->>'id',prod::text),'-',''),12))) returning id into variant;
   insert into supplier_inventory(variant_id) values(variant);
   for c in select value from jsonb_array_elements(coalesce(product->'costs','[]')) loop
    insert into supplier_costs values(variant,(c->>'from')::date,(c->>'cents')::bigint);
@@ -160,10 +160,10 @@ begin
    if not found then raise exception 'Producto ajeno o inexistente.'; end if;
   end if;
   if variant is null then
-   insert into supplier_variants(product_id,name,sku) values(prod,p_action->>'variantName',nullif(p_action->>'sku','')) returning id into variant;
+   insert into supplier_variants(product_id,name,sku) values(prod,p_action->>'variantName',trim(p_action->>'sku')) returning id into variant;
    insert into supplier_inventory(variant_id) values(variant);
   else
-   update supplier_variants set name=p_action->>'variantName',sku=nullif(p_action->>'sku','') where id=variant and product_id=prod;
+   update supplier_variants set name=p_action->>'variantName',sku=trim(p_action->>'sku') where id=variant and product_id=prod;
    if not found then raise exception 'Variante ajena o inexistente.'; end if;
   end if;
   insert into supplier_costs values(variant,(p_action->>'date')::date,(p_action->>'cents')::bigint)

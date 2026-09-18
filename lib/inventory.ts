@@ -47,7 +47,7 @@ export const inventoryCommand = z.discriminatedUnion("type", [
   z.object({ type: z.literal("role"), userId: uuid, role: z.enum(["USER", "SUPPLIER"]) }),
   z.object({ type: z.literal("relationship"), supplierId: uuid, sellerId: uuid, active: z.boolean() }),
   z.object({ type: z.literal("assignLegacy"), ownerId: uuid, supplierId: uuid }),
-  z.object({ type: z.literal("product"), supplierId: uuid, productId: uuid.optional(), variantId: uuid.optional(), name: z.string().trim().min(1).max(200), variantName: z.string().trim().min(1).max(100).default("Única"), sku: z.string().trim().max(100).default(""), date: z.iso.date(), cents: z.number().int().min(0).max(100000000000) }),
+  z.object({ type: z.literal("product"), supplierId: uuid, productId: uuid.optional(), variantId: uuid.optional(), name: z.string().trim().min(1).max(200), variantName: z.string().trim().min(1).max(100).default("Única"), sku: z.string().trim().min(1, "El SKU es obligatorio.").max(100), date: z.iso.date(), cents: z.number().int().min(0).max(100000000000) }),
   z.object({ type: z.literal("adjust"), variantId: uuid, delta: z.number().int().min(-1000000000).max(1000000000), reserved: quantity, safety: quantity, expectedVersion: quantity, movementType: z.enum(["MANUAL_ADJUSTMENT", "RESTOCK", "CORRECTION"]), note: z.string().trim().min(1).max(500), requestId: uuid }),
   z.object({ type: z.literal("mapping"), accountId: uuid, keys: z.array(z.string().regex(/^[A-Z]+\d+:\d+$/)).min(1).max(1000), variantId: uuid.nullable(), units: z.number().int().min(1).max(10000), mode: z.enum(["REAL", "FIXED"]), fixed: quantity.nullable(), preservePolicy: z.boolean().default(false) }),
 ]);
