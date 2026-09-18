@@ -53,9 +53,9 @@ function primaryMappings(mappings: StockMapping[]) {
   const byItem = new Map<string, StockMapping>();
   for (const mapping of mappings) {
     // Mercado Libre puede representar las opciones comerciales como varios item_id.
-    // user_product_id identifica el producto principal; si falta, usamos el título.
-    const title = mapping.title.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es-AR");
-    const key = `${mapping.account_id}:${mapping.user_product_id ? `up:${mapping.user_product_id}` : `title:${title}`}`;
+    // user_product_id identifica el producto principal; si falta, el stock asociado
+    // funciona como respaldo para no repetir todas las opciones en esta vista.
+    const key = `${mapping.account_id}:${mapping.user_product_id ? `up:${mapping.user_product_id}` : `variant:${mapping.variant_id}`}`;
     const current = byItem.get(key);
     if (!current || mapping.variation_id === "0") byItem.set(key, mapping);
   }
