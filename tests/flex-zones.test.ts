@@ -44,6 +44,19 @@ test("Solano no fija un partido a partir del nombre y no inventa zonas con coord
   }
 });
 
+test("localidades visibles en Ganancias resuelven el partido sin perder barrios anexados", () => {
+  const examples = [
+    ["Wilde", "CORDON_1"],
+    ["Villa Domínico", "CORDON_1"],
+    ["Villa Tesei barrio Asunción", "CORDON_2"],
+    ["Bernal Este", "CORDON_2"],
+    ["Dique Luján", "CORDON_2"],
+    ["Villa Udaondo", "CORDON_2"],
+  ] as const;
+  for (const [city, zone] of examples)
+    assert.equal(detectFlexZone({ province: "Buenos Aires", city }).zone, zone, city);
+});
+
 test("ejemplos del proveedor, alias y normalización", () => {
   for (const province of ["CABA", "Capital Federal", "Ciudad Autónoma de Buenos Aires"])
     assert.equal(resolveFlex(undefined, { province, city: "La Paternal" }, "2026-09-21").cents, 320000);

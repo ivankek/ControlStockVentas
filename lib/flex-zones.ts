@@ -16,11 +16,12 @@ export const MATANZA_LOCALITIES: Record<"CORDON_1" | "CORDON_2", string[]> = {
   CORDON_2: ["Isidro Casanova", "Rafael Castillo", "Gregorio de Laferrere", "Laferrere", "González Catán", "Virrey del Pino", "20 de Junio", "Veinte de Junio"],
 };
 export const FLEX_LOCALITIES: Record<string, string[]> = {
-  "Avellaneda": ["Sarandí"],
+  "Avellaneda": ["Sarandí", "Wilde", "Villa Domínico", "Dock Sud", "Piñeyro", "Crucecita"],
   "Pilar": ["Presidente Derqui", "Villa Rosa"],
-  "Quilmes": ["Bernal Oeste"],
+  "Quilmes": ["Bernal", "Bernal Oeste", "Bernal Este", "Ezpeleta", "Don Bosco"],
   "Berazategui": ["Juan María Gutiérrez"],
   "Hurlingham": ["Villa Tesei"],
+  "Ituzaingó": ["Villa Udaondo"],
   "Lomas de Zamora": ["Banfield", "Banfield Oeste", "Banfield Este", "Temperley", "Llavallol", "Turdera", "Villa Centenario", "Villa Fiorito", "Ingeniero Budge"],
   "Morón": ["Haedo", "El Palomar", "Castelar"],
   "Moreno": ["Paso del Rey"],
@@ -28,7 +29,7 @@ export const FLEX_LOCALITIES: Record<string, string[]> = {
   "Almirante Brown": ["Adrogué", "Burzaco", "Longchamps", "Glew", "Rafael Calzada", "Claypole"],
   "Tres de Febrero": ["Caseros", "Ciudadela", "Santos Lugares", "Villa Bosch", "Martín Coronado", "Loma Hermosa", "Pablo Podestá", "José Ingenieros", "Churruca"],
   "Esteban Echeverría": ["Monte Grande", "Luis Guillón", "9 de Abril", "Canning"],
-  "Tigre": ["General Pacheco", "El Talar", "Don Torcuato", "Benavídez", "Rincón de Milberg"],
+  "Tigre": ["General Pacheco", "El Talar", "Don Torcuato", "Benavídez", "Rincón de Milberg", "Dique Luján"],
   "Escobar": ["Belén de Escobar", "Garín", "Ingeniero Maschwitz", "Matheu", "Maquinista Savio"],
   "Vicente López": ["Olivos", "Florida", "Florida Oeste", "Munro", "Carapachay", "Villa Martelli", "La Lucila"],
 };
@@ -37,6 +38,11 @@ export const FLEX_POSTAL_LOCALITIES: Record<string, string> = { "1753": "Villa L
 export type FlexDestination = { province?: string; municipality?: string; city?: string; neighborhood?: string; postalCode?: string; latitude?: number; longitude?: number };
 export type FlexDetection = { zone?: FlexSelection; method: "manual" | "province" | "municipality" | "locality" | "postal" | "unknown"; reason: string };
 const includes = (names: string[], value?: string) => !!value && names.some((name) => normalizePlace(name) === normalizePlace(value));
+// Mercado Libre sometimes appends a neighborhood to the locality, e.g. "Villa Tesei barrio Asunción".
+const localityIncludes = (names: string[], value?: string) => {
+  const place = normalizePlace(value);
+  return !!place && names.some((name) => place === normalizePlace(name) || place.startsWith(`${normalizePlace(name)} barrio `));
+};
 const caba = (value?: string) => includes(["CABA", "Capital Federal", "Ciudad Autónoma de Buenos Aires", "Ciudad de Buenos Aires"], value);
 const districtZone = (value?: string): FlexZone | undefined => FLEX_ZONES.find((zone) => zone !== "CABA" && includes(FLEX_DISTRICTS[zone], value));
 const matanzaZone = (value?: string): FlexZone | undefined => (["CORDON_1", "CORDON_2"] as const).find((zone) => includes(MATANZA_LOCALITIES[zone], value));
@@ -75,7 +81,7 @@ export function detectFlexZone(destination: FlexDestination, manual?: FlexSelect
   for (const place of [destination.city, destination.neighborhood]) {
     const zone = districtZone(place) ?? matanzaZone(place);
     if (zone) zones.add(zone);
-    for (const [district, names] of Object.entries(FLEX_LOCALITIES)) if (includes(names, place)) { zones.add(districtZone(district)!); districts.add(district); }
+    for (const [district, names] of Object.entries(FLEX_LOCALITIES)) if (localityIncludes(names, place)) { zones.add(districtZone(district)!); districts.add(district); }
   }
   return zones.size === 1 ? { zone: [...zones][0], method: "locality", reason: `Localidad / barrio reconocido${districts.size ? ` → ${[...districts].join(" / ")}` : ""} · clasificación aproximada` } : unknown(zones.size ? "Datos de destino contradictorios" : "Destino sin clasificación confiable");
 }
