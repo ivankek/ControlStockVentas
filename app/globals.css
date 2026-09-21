@@ -677,6 +677,27 @@ h1 { margin-bottom: 6px; font-size: 30px; }
 .profit-card { padding: 20px; min-width: 0; }
 .profit-card > strong { font-size: clamp(22px, 2.3vw, 30px); overflow-wrap: anywhere; }
 .profit-chart { margin: 20px 0; }
+.profit-grid-controls { display: flex; flex-wrap: wrap; gap: 14px; padding: 18px 24px; border-bottom: 1px solid var(--line); background: #fcfdfc; }
+.profit-grid-controls label { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+.profit-grid-controls input, .profit-grid-controls select { min-width: 180px; padding: 9px 10px; border: 1px solid #d8e1de; border-radius: 8px; background: white; color: var(--ink); font: inherit; }
+.profit-grid-controls input { min-width: min(300px, calc(100vw - 96px)); }
+.profit-table-wrap { max-height: 70dvh; overflow: auto; }
+.profit-table { min-width: 1280px; white-space: normal; font-variant-numeric: tabular-nums; }
+.profit-table th { position: sticky; top: 0; z-index: 1; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.profit-table td { vertical-align: top; padding-top: 14px; padding-bottom: 14px; }
+.profit-table td:nth-child(1), .profit-table td:nth-child(5), .profit-table td:nth-child(6), .profit-table td:nth-child(7), .profit-table td:nth-child(8), .profit-table td:nth-child(9) { white-space: nowrap; }
+.profit-table td:nth-child(2) { min-width: 220px; max-width: 320px; }
+.profit-table td:nth-child(3) { min-width: 160px; max-width: 220px; }
+.profit-table td:nth-child(10) { min-width: 170px; }
+.profit-table strong { display: block; font-size: 13px; }
+.profit-table small { display: block; margin-top: 5px; color: var(--muted); line-height: 1.35; }
+.profit-table .sale-detail { margin: 0; }
+.profit-table .sale-detail summary { white-space: nowrap; }
+.profit-table .sale-detail ul { padding-left: 17px; min-width: 230px; }
+.profit-table .sale-detail p { max-width: 280px; }
+.profit-pending { background: #fffdf8; }
+.pending-value { color: #9a6511; font-weight: 700; }
+.net-value { color: #17483e; font-weight: 700; }
 .profit-sale { padding: 20px 24px; border-bottom: 1px solid var(--line); min-width: 0; }
 .profit-sale:last-child { border-bottom: 0; }
 .profit-sale-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; font-size: 14px; margin-bottom: 6px; }
@@ -708,6 +729,7 @@ h1 { margin-bottom: 6px; font-size: 30px; }
   .shell > aside { width: 232px; padding: 20px 12px; }
   .shell .content { padding: 20px; }
   .sale-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .profit-grid-controls { padding: 16px 20px; }
   .shipping-defaults { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
@@ -724,4 +746,6 @@ h1 { margin-bottom: 6px; font-size: 30px; }
   .toolbar .profit-switch { margin-left: 0; }
   .profit-sale { padding: 18px 16px; }
   .sale-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .profit-grid-controls { padding: 14px 16px; }
+  .profit-grid-controls label, .profit-grid-controls input, .profit-grid-controls select { width: 100%; min-width: 0; }
 }

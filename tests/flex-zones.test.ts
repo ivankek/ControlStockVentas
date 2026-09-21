@@ -13,6 +13,8 @@ test("ejemplos del proveedor, alias y normalización", () => {
   assert.equal(detectFlexZone({ province: "Buenos Aires", municipality: "Partido de Lomas de Zamora", city: "Banfield Oeste" }).zone, "CORDON_1");
   assert.equal(detectFlexZone({ province: "Buenos Aires", city: "Banfield Oeste" }).zone, "CORDON_1");
   assert.equal(detectFlexZone({ province: "Buenos Aires", city: "MORON" }).zone, "CORDON_2");
+  assert.equal(detectFlexZone({ province: "Buenos Aires", city: "Caseros" }).zone, "CORDON_1");
+  assert.equal(detectFlexZone({ province: "Buenos Aires", city: "Canning" }).zone, "CORDON_2");
   assert.equal(detectFlexZone({ province: "Buenos Aires", municipality: "Zárate" }).zone, "CORDON_3");
 });
 

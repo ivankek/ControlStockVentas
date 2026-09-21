@@ -26,6 +26,9 @@ export default function Profits({ token }: { token?: string }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  const [detailFilter, setDetailFilter] = useState<"all" | "pending" | "calculable">("all");
+  const [detailSort, setDetailSort] = useState("pending");
+  const [detailSearch, setDetailSearch] = useState("");
   const [result, setResult] = useState<{ sales: Sale[]; state: State; from: string; to: string; time: string }>();
   const controller = useRef<AbortController | null>(null);
   useEffect(() => { controller.current?.abort(); setResult(undefined); setBusy(false); return () => controller.current?.abort(); }, [token]);
@@ -58,6 +61,28 @@ export default function Profits({ token }: { token?: string }) {
     finally { if (!request.signal.aborted) { setBusy(false); setProgress(""); } }
   }
   const rows = useMemo(() => result ? profitRows(result.state, result.sales) : [], [result]);
+  const visibleRows = useMemo(() => {
+    const query = detailSearch.trim().toLocaleLowerCase("es-AR");
+    const productName = (row: typeof rows[number]) => row.sale.lines.map((line) => {
+      const listing = result?.state.listings?.find((item) => item.id === line.productId.split(":")[0]);
+      return listing?.title ?? line.productId;
+    }).join(" ");
+    const filtered = rows.filter((row) => {
+      if (detailFilter === "pending" && row.net !== undefined) return false;
+      if (detailFilter === "calculable" && row.net === undefined) return false;
+      return !query || [row.sale.id, row.date, row.sale.province, row.sale.city, productName(row), ...row.issues].filter(Boolean).join(" ").toLocaleLowerCase("es-AR").includes(query);
+    });
+    const amount = (value?: number) => value ?? Number.NEGATIVE_INFINITY;
+    return [...filtered].sort((a, b) => {
+      if (detailSort === "pending") return Number(b.net === undefined) - Number(a.net === undefined) || b.date.localeCompare(a.date);
+      if (detailSort === "date-asc") return a.date.localeCompare(b.date);
+      if (detailSort === "date-desc") return b.date.localeCompare(a.date);
+      if (detailSort === "gross-desc") return amount(b.gross) - amount(a.gross);
+      if (detailSort === "received-desc") return amount(b.received) - amount(a.received);
+      if (detailSort === "provider-desc") return amount(b.supplier) - amount(a.supplier);
+      return amount(b.net) - amount(a.net);
+    });
+  }, [rows, result, detailFilter, detailSearch, detailSort]);
   const business = result?.state.business ?? emptyBusiness();
   const totals = result ? reportTotals(rows, business, result.from, result.to) : undefined;
   const buckets = useMemo(() => {
@@ -105,24 +130,13 @@ export default function Profits({ token }: { token?: string }) {
       <section className="panel profit-chart"><h2>{net ? "Evolución del neto estimado" : "Evolución de ventas brutas"}{incomplete ? " · parcial" : ""}</h2>
         {buckets.map((bucket) => { const value = net ? bucket.net : bucket.gross; return <div className="profit-bar-row" key={bucket.label}><span>{bucket.label}</span><div className="profit-bar-track"><div className={value < 0 ? "profit-bar negative" : "profit-bar"} style={{ width: `${Math.max(0, Math.abs(value) / max * 100)}%` }} /></div><strong>{money(value)}</strong></div>; })}
       </section>
-      <section className="panel pending"><div className="panel-title"><h2>Detalle por venta</h2><span className="pill">{rows.length} ventas</span></div>
-        <div className="profit-sales">{rows.map((row) => <article className="profit-sale" key={row.sale.id}>
-          <div className="profit-sale-heading"><strong>Orden {row.sale.id}</strong><span>{row.date} · {row.sale.mode === "correo" ? "Correo" : row.sale.mode === "flex" ? "Flex" : "Acordado"}</span></div>
-          <p>{[row.sale.province, row.sale.city].filter(Boolean).join(" · ") || "Ubicación no informada"}</p>
-          <dl className="sale-metrics"><div><dt>Bruto</dt><dd>{row.gross === undefined ? "A revisar" : money(row.gross)}</dd></div>
-            {net && <><div><dt>Recibido</dt><dd>{row.received === undefined ? "Pendiente" : money(row.received)}{row.manualNet && <small>Manual</small>}</dd></div>
-              <div><dt>Proveedor</dt><dd>{row.supplier === undefined ? "Pendiente" : money(row.supplier)}</dd></div>
-              <div><dt>Envío propio</dt><dd>{row.shipping === undefined ? "Pendiente" : money(row.shipping)}</dd></div>
-              <div className="sale-net"><dt>Neto de la venta</dt><dd>{row.net === undefined ? "Pendiente" : money(row.net)}</dd></div></>}
-          </dl>
-          {net && <details className="sale-detail"><summary>Revisar y completar importes{row.issues.length ? ` · ${row.issues.length} pendientes` : ""}</summary>
-            {!!row.issues.length && <ul>{row.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
-            <p>El neto de esta venta todavía no descuenta los gastos mensuales. Esos gastos se restan una sola vez del total del período.</p>
-            {row.flex && <p>Flex: {row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida"} · {row.flex.reason}{row.flex.baselineRate ? " · tarifa base estimada" : ""}{row.shipping === 0 && row.flex.cents ? " · costo incluido en otra orden del envío" : ""}</p>}
-            <OrderNoteEditor financial order={row.sale} note={business.notes[row.sale.id]} token={token} onSaved={() => void refreshCosts()} />
-          </details>}
-        </article>)}</div>
-        {!rows.length && <p className="empty">No se encontraron ventas en el período consultado.</p>}
+      <section className="panel pending"><div className="panel-title"><h2>Detalle por venta</h2><span className="pill">{visibleRows.length} de {rows.length}</span></div>
+        <div className="profit-grid-controls"><label>Buscar<input value={detailSearch} onChange={(event) => setDetailSearch(event.target.value)} placeholder="Orden, producto o destino" /></label><label>Ver<select value={detailFilter} onChange={(event) => setDetailFilter(event.target.value as typeof detailFilter)}><option value="all">Todas</option><option value="pending">Pendientes de cálculo</option><option value="calculable">Con neto calculable</option></select></label><label>Ordenar<select value={detailSort} onChange={(event) => setDetailSort(event.target.value)}><option value="pending">Pendientes primero</option><option value="date-desc">Fecha: más reciente</option><option value="date-asc">Fecha: más antigua</option><option value="gross-desc">Bruto: mayor importe</option><option value="received-desc">Recibido: mayor importe</option><option value="provider-desc">Proveedor: mayor importe</option><option value="net-desc">Neto: mayor importe</option></select></label></div>
+        <div className="table-wrap profit-table-wrap"><table className="profit-table"><thead><tr><th>FECHA</th><th>ORDEN / PRODUCTO</th><th>DESTINO</th><th>ENVÍO</th><th>BRUTO</th><th>RECIBIDO</th><th>PROVEEDOR</th><th>LOGÍSTICA</th><th>NETO</th><th>ESTADO</th></tr></thead><tbody>{visibleRows.map((row) => {
+          const product = row.sale.lines.map((line) => { const listing = result.state.listings?.find((item) => item.id === line.productId.split(":")[0]); return `${listing?.title ?? line.productId} × ${line.quantity}`; }).join(" · ");
+          return <tr className={row.net === undefined ? "profit-pending" : undefined} key={row.sale.id}><td>{row.date.split("-").reverse().join("/")}</td><td><strong>{row.sale.id}</strong><small>{product}</small></td><td>{[row.sale.province, row.sale.city].filter(Boolean).join(" · ") || "Sin ubicación"}</td><td>{row.sale.mode === "correo" ? "Correo" : row.sale.mode === "flex" ? "Flex" : "Acordado"}{row.flex && <small>{row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida"}</small>}</td><td>{row.gross === undefined ? "A revisar" : money(row.gross)}</td><td>{row.received === undefined ? "Pendiente" : money(row.received)}</td><td>{row.supplier === undefined ? "Pendiente" : money(row.supplier)}</td><td>{row.shipping === undefined ? "Pendiente" : money(row.shipping)}</td><td className={row.net === undefined ? "pending-value" : "net-value"}>{row.net === undefined ? "Pendiente" : money(row.net)}</td><td><details className="sale-detail"><summary>{row.issues.length ? `${row.issues.length} pendiente${row.issues.length === 1 ? "" : "s"}` : "Ver detalle"}</summary>{!!row.issues.length && <ul>{row.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}<p>El neto de la venta no descuenta los gastos mensuales; se restan una vez del total del período.</p>{row.flex && <p>Flex: {row.flex.reason}{row.flex.baselineRate ? " · tarifa base estimada" : ""}{row.shipping === 0 && row.flex.cents ? " · costo incluido en otra orden del envío" : ""}</p>}<OrderNoteEditor financial order={row.sale} note={business.notes[row.sale.id]} token={token} onSaved={() => void refreshCosts()} /></details></td></tr>;
+        })}</tbody></table></div>
+        {!visibleRows.length && <p className="empty">No se encontraron ventas con esos filtros.</p>}
       </section>    </>}
   </div>;
 }
