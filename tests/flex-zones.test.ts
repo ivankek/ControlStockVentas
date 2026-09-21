@@ -5,6 +5,45 @@ import { businessCommand, emptyBusiness, resolveFlex, resolveFlexShipments, upda
 import { emptyState, type Order } from "../lib/domain";
 import { shipmentDestination } from "../lib/shipping";
 
+test("municipio primero y localidades conocidas como alternativa", () => {
+  const examples = [
+    ["Sarandí", "Avellaneda", "CORDON_1", 364000],
+    ["Presidente Derqui", "Pilar", "CORDON_2", 420000],
+    ["Villa Rosa", "Pilar", "CORDON_2", 420000],
+    ["Bernal Oeste", "Quilmes", "CORDON_2", 420000],
+    ["Juan María Gutiérrez", "Berazategui", "CORDON_2", 420000],
+    ["Villa Tesei", "Hurlingham", "CORDON_2", 420000],
+  ] as const;
+  for (const [city, municipality, zone, cents] of examples) {
+    for (const variant of [city, city.toUpperCase(), `  ${city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ /g, "   ")}  `]) {
+      const result = resolveFlex(undefined, { province: "Buenos Aires", city: variant }, "2026-09-21");
+      assert.equal(result.zone, zone, variant);
+      assert.equal(result.cents, cents);
+      assert.ok(result.reason.includes(municipality));
+    }
+    const result = detectFlexZone({ province: "Buenos Aires", municipality, city: "Barrio sin clasificar" });
+    assert.equal(result.zone, zone);
+    assert.equal(result.method, "municipality");
+  }
+  assert.equal(detectFlexZone({ province: "Buenos Aires", municipality: "  ", city: "Sarandí" }).zone, "CORDON_1");
+  assert.equal(detectFlexZone({ province: "Buenos Aires", city: "Almirante Brown" }).zone, "CORDON_2");
+  assert.equal(detectFlexZone({ province: "Buenos Aires", municipality: "Pilar", city: "Sarandí" }).method, "municipality");
+  assert.equal(detectFlexZone({ province: "Buenos Aires", municipality: "Pilar", city: "Sarandí" }).zone, "CORDON_2");
+  assert.equal(detectFlexZone({ province: "Buenos Aires", municipality: "La Matanza", city: "La Matanza", neighborhood: "Villa Luzuriaga" }).zone, "CORDON_1");
+  assert.equal(detectFlexZone({ province: "Buenos Aires", city: "La Matanza" }).zone, undefined);
+});
+
+test("Solano no fija un partido a partir del nombre y no inventa zonas con coordenadas o CP", () => {
+  for (const municipality of ["Quilmes", "Almirante Brown"]) {
+    const result = detectFlexZone({ province: "Buenos Aires", municipality, city: "San Francisco Solano" });
+    assert.equal(result.zone, "CORDON_2");
+    assert.equal(result.method, "municipality");
+  }
+  for (const city of ["San Francisco Solano", "solano"]) {
+    assert.equal(detectFlexZone({ province: "Buenos Aires", city, postalCode: "1881", latitude: -34.78, longitude: -58.3 }).zone, undefined);
+  }
+});
+
 test("ejemplos del proveedor, alias y normalización", () => {
   for (const province of ["CABA", "Capital Federal", "Ciudad Autónoma de Buenos Aires"])
     assert.equal(resolveFlex(undefined, { province, city: "La Paternal" }, "2026-09-21").cents, 320000);
@@ -66,5 +105,8 @@ test("extrae dirección de entrega tanto nueva como legacy, sin usar facturació
   assert.deepEqual(modern, shipmentDestination({ id: 1, status: "shipped", receiver_address: address }));
   assert.equal(modern.municipality, "La Matanza");
   assert.equal(modern.postalCode, "1753");
+  const cleaned = shipmentDestination({ id: 1, status: "shipped", destination: { shipping_address: { ...address, municipality: { name: "   " }, city: { name: " Sarandí " } } } });
+  assert.equal(cleaned.municipality, undefined);
+  assert.equal(cleaned.city, "Sarandí");
   assert.equal(shipmentDestination({ id: 1, status: "shipped", receiver_address: { latitude: NaN, longitude: 900 } }).longitude, undefined);
 });

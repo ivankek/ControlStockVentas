@@ -18,7 +18,8 @@ export type Shipment = {
 };
 export function shipmentDestination(shipment: Shipment) {
   const a = shipment.destination?.shipping_address ?? shipment.receiver_address;
-  return { province: a?.state?.name, city: a?.city?.name, municipality: a?.municipality?.name, neighborhood: a?.neighborhood?.name, postalCode: a?.zip_code,
+  const text = (value: unknown) => typeof value === "string" ? value.trim() || undefined : undefined;
+  return { province: text(a?.state?.name), city: text(a?.city?.name), municipality: text(a?.municipality?.name), neighborhood: text(a?.neighborhood?.name), postalCode: text(a?.zip_code),
     latitude: typeof a?.latitude === "number" && Math.abs(a.latitude) <= 90 ? a.latitude : undefined,
     longitude: typeof a?.longitude === "number" && Math.abs(a.longitude) <= 180 ? a.longitude : undefined };
 }

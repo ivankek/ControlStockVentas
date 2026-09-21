@@ -16,6 +16,11 @@ export const MATANZA_LOCALITIES: Record<"CORDON_1" | "CORDON_2", string[]> = {
   CORDON_2: ["Isidro Casanova", "Rafael Castillo", "Gregorio de Laferrere", "Laferrere", "González Catán", "Virrey del Pino", "20 de Junio", "Veinte de Junio"],
 };
 export const FLEX_LOCALITIES: Record<string, string[]> = {
+  "Avellaneda": ["Sarandí"],
+  "Pilar": ["Presidente Derqui", "Villa Rosa"],
+  "Quilmes": ["Bernal Oeste"],
+  "Berazategui": ["Juan María Gutiérrez"],
+  "Hurlingham": ["Villa Tesei"],
   "Lomas de Zamora": ["Banfield", "Banfield Oeste", "Banfield Este", "Temperley", "Llavallol", "Turdera", "Villa Centenario", "Villa Fiorito", "Ingeniero Budge"],
   "Morón": ["Haedo", "El Palomar", "Castelar"],
   "Moreno": ["Paso del Rey"],
@@ -41,8 +46,15 @@ export function detectFlexZone(destination: FlexDestination, manual?: FlexSelect
   if (caba(destination.province)) return { zone: "CABA", method: "province", reason: "Provincia: CABA / Capital Federal" };
   // Never classify names shared with other provinces as AMBA.
   if (destination.province && !includes(["Buenos Aires", "Provincia de Buenos Aires", "GBA", "Gran Buenos Aires"], destination.province)) return unknown("Destino fuera de AMBA o provincia no reconocida");
-  if (caba(destination.municipality) || caba(destination.city)) return { zone: "CABA", method: "municipality", reason: "Destino identificado como CABA" };
-  const isMatanza = includes(["La Matanza"], destination.municipality) || includes(["La Matanza"], destination.city);
+  const municipality = normalizePlace(destination.municipality) ? destination.municipality : undefined;
+  if (caba(municipality)) return { zone: "CABA", method: "municipality", reason: "Municipio identificado como CABA" };
+  // A real municipality takes precedence over locality names, including ambiguous ones.
+  if (municipality && !includes(["La Matanza"], municipality)) {
+    const zone = districtZone(municipality);
+    return zone ? { zone, method: "municipality", reason: `Municipio: ${municipality} · clasificación aproximada` } : unknown(`Municipio no clasificado: ${municipality}`);
+  }
+  if (!municipality && caba(destination.city)) return { zone: "CABA", method: "locality", reason: "Destino identificado como CABA" };
+  const isMatanza = includes(["La Matanza"], municipality) || includes(["La Matanza"], destination.city);
   if (isMatanza) {
     const zones = new Set([matanzaZone(destination.city), matanzaZone(destination.neighborhood)].filter(Boolean));
     if (zones.size === 1) return { zone: [...zones][0], method: "locality", reason: "Localidad de La Matanza · clasificación aproximada" };
@@ -55,17 +67,15 @@ export function detectFlexZone(destination: FlexDestination, manual?: FlexSelect
     }
     return unknown("La Matanza: falta una localidad clasificada");
   }
-  if (destination.municipality) {
-    const zone = districtZone(destination.municipality);
-    return zone ? { zone, method: "municipality", reason: `Municipio: ${destination.municipality} · clasificación aproximada` } : unknown("Municipio no clasificado");
-  }
   // Missing province is too weak for locality-only matches (e.g. San Martín).
   if (!destination.province) return unknown("Falta provincia o municipio para ubicar el destino");
+  if ([destination.city, destination.neighborhood].some((place) => includes(["San Francisco Solano", "Solano"], place))) return unknown("San Francisco Solano: falta municipio o ubicación geográfica verificable");
   const zones = new Set<FlexZone>();
+  const districts = new Set<string>();
   for (const place of [destination.city, destination.neighborhood]) {
     const zone = districtZone(place) ?? matanzaZone(place);
     if (zone) zones.add(zone);
-    for (const [district, names] of Object.entries(FLEX_LOCALITIES)) if (includes(names, place)) zones.add(districtZone(district)!);
+    for (const [district, names] of Object.entries(FLEX_LOCALITIES)) if (includes(names, place)) { zones.add(districtZone(district)!); districts.add(district); }
   }
-  return zones.size === 1 ? { zone: [...zones][0], method: "locality", reason: "Localidad / barrio reconocido · clasificación aproximada" } : unknown(zones.size ? "Datos de destino contradictorios" : "Destino sin clasificación confiable");
+  return zones.size === 1 ? { zone: [...zones][0], method: "locality", reason: `Localidad / barrio reconocido${districts.size ? ` → ${[...districts].join(" / ")}` : ""} · clasificación aproximada` } : unknown(zones.size ? "Datos de destino contradictorios" : "Destino sin clasificación confiable");
 }
