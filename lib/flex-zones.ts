@@ -15,6 +15,35 @@ export const MATANZA_LOCALITIES: Record<"CORDON_1" | "CORDON_2", string[]> = {
   CORDON_1: ["San Justo", "Ramos Mejía", "Villa Luzuriaga", "Lomas del Mirador", "La Tablada", "Tapiales", "Ciudad Madero", "Villa Madero", "Villa Eduardo Madero", "Villa Celina", "Aldo Bonzi", "Ciudad Evita"],
   CORDON_2: ["Isidro Casanova", "Rafael Castillo", "Gregorio de Laferrere", "Laferrere", "González Catán", "Virrey del Pino", "20 de Junio", "Veinte de Junio"],
 };
+// Official Georef locality centroids (department 06427). For a point already
+// confirmed inside La Matanza, the nearest classified locality determines the
+// provider's internal Flex sector. Aliases share their canonical centroid.
+const MATANZA_REFERENCE_POINTS: { name: string; zone: "CORDON_1" | "CORDON_2"; latitude: number; longitude: number }[] = [
+  { name: "Ramos Mejía", zone: "CORDON_1", latitude: -34.645499339, longitude: -58.559665743 },
+  { name: "Villa Luzuriaga", zone: "CORDON_1", latitude: -34.66353089, longitude: -58.582392279 },
+  { name: "Lomas del Mirador", zone: "CORDON_1", latitude: -34.665276521, longitude: -58.531773928 },
+  { name: "San Justo", zone: "CORDON_1", latitude: -34.68114175, longitude: -58.563738604 },
+  { name: "La Tablada", zone: "CORDON_1", latitude: -34.686462325, longitude: -58.525646139 },
+  { name: "Villa Madero", zone: "CORDON_1", latitude: -34.688132275, longitude: -58.493173811 },
+  { name: "Tapiales", zone: "CORDON_1", latitude: -34.699052209, longitude: -58.507857545 },
+  { name: "Aldo Bonzi", zone: "CORDON_1", latitude: -34.706983735, longitude: -58.519168623 },
+  { name: "Ciudad Evita", zone: "CORDON_1", latitude: -34.715773149, longitude: -58.534945617 },
+  { name: "Rafael Castillo", zone: "CORDON_2", latitude: -34.709098532, longitude: -58.62563352 },
+  { name: "Isidro Casanova", zone: "CORDON_2", latitude: -34.710970266, longitude: -58.585808419 },
+  { name: "Gregorio de Laferrere", zone: "CORDON_2", latitude: -34.746993578, longitude: -58.589256798 },
+  { name: "González Catán", zone: "CORDON_2", latitude: -34.773025312, longitude: -58.644039394 },
+  { name: "20 de Junio", zone: "CORDON_2", latitude: -34.776153942, longitude: -58.729567304 },
+  { name: "Virrey del Pino", zone: "CORDON_2", latitude: -34.837653605, longitude: -58.646968225 },
+];
+export function matanzaZoneFromCoordinates(latitude: number, longitude: number) {
+  const longitudeScale = Math.cos(latitude * Math.PI / 180);
+  return MATANZA_REFERENCE_POINTS.reduce((nearest, point) => {
+    const lat = latitude - point.latitude;
+    const lon = (longitude - point.longitude) * longitudeScale;
+    const distance = lat * lat + lon * lon;
+    return !nearest || distance < nearest.distance ? { zone: point.zone, locality: point.name, distance } : nearest;
+  }, undefined as { zone: "CORDON_1" | "CORDON_2"; locality: string; distance: number } | undefined);
+}
 export const FLEX_LOCALITIES: Record<string, string[]> = {
   "Avellaneda": ["Sarandí", "Wilde", "Villa Domínico", "Dock Sud", "Piñeyro", "Crucecita"],
   "Pilar": ["Presidente Derqui", "Villa Rosa"],

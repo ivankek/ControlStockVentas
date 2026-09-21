@@ -1,5 +1,5 @@
 // Server-side enrichment only. Never forward ML credentials or buyer identities.
-import { detectFlexZone, normalizePlace, type FlexDetection, type FlexDestination } from "./flex-zones";
+import { detectFlexZone, matanzaZoneFromCoordinates, normalizePlace, type FlexDetection, type FlexDestination } from "./flex-zones";
 import { shipmentDestination, type Shipment } from "./shipping";
 
 type Place = { id?: string; nombre?: string };
@@ -17,31 +17,37 @@ function classify(row: Location, dest: FlexDestination, method: FlexDetection["m
 }
 
 // Request-scoped memoization: private addresses never enter a persistent cache.
-// A service failure opens the circuit for this request; sales remain available.
+// Failures are isolated per lookup, allowing address/locality fallback and later shipments.
 export function createGeorefResolver(fetcher: typeof fetch = fetch) {
   const memo = new Map<string, Promise<FlexDetection | undefined>>();
-  let unavailable = false;
   return async (shipment: Shipment): Promise<FlexDetection | undefined> => {
     if (shipment.logistic_type !== "self_service") return;
     const dest = shipmentDestination(shipment);
     const direct = detectFlexZone(dest);
-    if (direct.zone && (direct.method === "province" || direct.method === "municipality" || (same(dest.municipality, "La Matanza") && direct.method === "locality"))) return;
+    const hasCoordinates = dest.latitude !== undefined && dest.longitude !== undefined;
+    // A usable ML municipality avoids a geocoding request. La Matanza is the
+    // exception: its municipality alone never determines the internal sector.
+    if (direct.zone && (direct.method === "province" || direct.method === "municipality" || (!hasCoordinates && same(dest.municipality, "La Matanza") && direct.method === "locality"))) return;
     const address = shipment.destination?.shipping_address ?? shipment.receiver_address;
     const key = JSON.stringify([dest, address?.address_line, address?.street_name, address?.street_number]);
     if (memo.has(key)) return memo.get(key)!;
     const pending = (async (): Promise<FlexDetection | undefined> => {
-      if (unavailable) return;
       let geographic: FlexDetection | undefined;
       let coordinateDistrict: string | undefined;
-      const signal = AbortSignal.timeout(3000);
       const query = async (endpoint: string, params: Record<string, string>) => {
-        const response = await fetcher(`${base}${endpoint}?${new URLSearchParams({ ...params, campos: "completo" })}`, { cache: "no-store", signal });
-        if (!response.ok) throw Error("Georef unavailable");
-        return response.json();
+        try {
+          const response = await fetcher(`${base}${endpoint}?${new URLSearchParams({ ...params, campos: "completo" })}`, { cache: "no-store", signal: AbortSignal.timeout(1500) });
+          if (!response.ok) return {};
+          return await response.json();
+        } catch { return {}; }
       };
       try {
         if (dest.latitude !== undefined && dest.longitude !== undefined) {
           const data = await query("ubicacion", { lat: String(dest.latitude), lon: String(dest.longitude) });
+          if (same(data.ubicacion?.departamento?.nombre, "La Matanza")) {
+            const sector = matanzaZoneFromCoordinates(dest.latitude, dest.longitude);
+            if (sector) return { zone: sector.zone, method: "georef-coordinates", reason: `Georef confirmó La Matanza · sector por coordenadas, referencia ${sector.locality}` };
+          }
           const resolved = classify(data.ubicacion ?? {}, dest, "georef-coordinates");
           if (resolved?.zone || (resolved && !same(data.ubicacion?.departamento?.nombre, "La Matanza"))) return resolved;
           geographic = resolved;
@@ -72,7 +78,7 @@ export function createGeorefResolver(fetcher: typeof fetch = fetch) {
         const exact = rows.filter(row => same(row.nombre, city) && row.provincia?.id === province);
         if (data.total > rows.length || exact.length > 1) return { method: "georef-locality", reason: "Georef: localidad ambigua; falta dirección o municipio verificable" };
         if (exact.length === 1) return classify(exact[0], dest, "georef-locality");
-      } catch { unavailable = true; }
+      } catch { /* Invalid external response: preserve local fallback. */ }
       // Unavailable or no exact result: preserve the existing conservative aliases.
       return geographic;
     })();

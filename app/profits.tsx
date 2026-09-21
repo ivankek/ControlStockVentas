@@ -60,7 +60,9 @@ export default function Profits({ token }: { token?: string }) {
     } catch (e) { if (!request.signal.aborted) setError((e as Error).message); }
     finally { if (!request.signal.aborted) { setBusy(false); setProgress(""); } }
   }
-  const rows = useMemo(() => result ? profitRows(result.state, result.sales) : [], [result]);
+  const rows = useMemo(() => result ? profitRows(result.state, result.sales).filter((row) =>
+    !row.sale.cancelled && row.sale.orderStatus !== "cancelled" && row.sale.shippingStatus !== "cancelled",
+  ) : [], [result]);
   const visibleRows = useMemo(() => {
     const query = detailSearch.trim().toLocaleLowerCase("es-AR");
     const productName = (row: typeof rows[number]) => row.sale.lines.map((line) => {

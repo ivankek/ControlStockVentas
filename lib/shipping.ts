@@ -1,5 +1,5 @@
 import { localDate } from "./domain";
-type ShippingAddress = { address_line?: string; street_name?: string; street_number?: string | number; receiver_name?: string; state?: { name?: string }; city?: { name?: string }; municipality?: { name?: string }; neighborhood?: { name?: string }; zip_code?: string; latitude?: number; longitude?: number };
+type ShippingAddress = { address_line?: string; street_name?: string; street_number?: string | number; receiver_name?: string; state?: { name?: string }; city?: { name?: string }; municipality?: { name?: string }; neighborhood?: { name?: string }; zip_code?: string; latitude?: number | string; longitude?: number | string };
 export type Shipment = {
   id: number;
   status: string;
@@ -19,9 +19,14 @@ export type Shipment = {
 export function shipmentDestination(shipment: Shipment) {
   const a = shipment.destination?.shipping_address ?? shipment.receiver_address;
   const text = (value: unknown) => typeof value === "string" ? value.trim() || undefined : undefined;
+  const coordinate = (value: unknown, limit: number) => {
+    if (typeof value !== "number" && (typeof value !== "string" || !/^-?\d+(\.\d+)?$/.test(value.trim()))) return undefined;
+    const number = Number(value);
+    return Number.isFinite(number) && Math.abs(number) <= limit ? number : undefined;
+  };
   return { province: text(a?.state?.name), city: text(a?.city?.name), municipality: text(a?.municipality?.name), neighborhood: text(a?.neighborhood?.name), postalCode: text(a?.zip_code),
-    latitude: typeof a?.latitude === "number" && Math.abs(a.latitude) <= 90 ? a.latitude : undefined,
-    longitude: typeof a?.longitude === "number" && Math.abs(a.longitude) <= 180 ? a.longitude : undefined };
+    latitude: coordinate(a?.latitude, 90),
+    longitude: coordinate(a?.longitude, 180) };
 }
 // x-format-new nests logistics and estimates; keep support for legacy responses.
 export function normalizeShipment(shipment: Shipment): Shipment {
