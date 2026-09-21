@@ -1,6 +1,6 @@
 # Costos de logística Flex
 
-`lib/flex-zones.ts` contiene las tarifas base en centavos, los partidos, los alias y la división de localidades de La Matanza. Es una clasificación operativa aproximada del mapa del proveedor; no son las zonas de cobro de Mercado Libre. Revisar estas listas con la logística antes de usarlas como liquidación definitiva. Villa Luzuriaga en Cordón 1 está confirmada por el usuario.
+`lib/flex-zones.ts` contiene las tarifas base en centavos, los partidos, los alias y la división de localidades de La Matanza. Es una clasificación operativa aproximada del mapa del proveedor; no son las zonas de cobro de Mercado Libre. Revisar estas listas con la logística antes de usarlas como liquidación definitiva. En La Matanza, Ciudad Evita pertenece al Cordón 1; Gregorio de Laferrere/Laferrere pertenece al Cordón 2. Las localidades no clasificadas quedan pendientes.
 
 La dirección proviene exclusivamente del destino de `/shipments`, tanto del formato nuevo como del anterior. No se usa la dirección de facturación. Se transportan provincia, municipio, localidad, barrio, CP y coordenadas cuando están disponibles. Referencia: https://developers.mercadolibre.com.ar/es_ar/autenticacion-y-autorizacion/envios
 

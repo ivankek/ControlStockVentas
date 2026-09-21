@@ -18,7 +18,10 @@ test("ejemplos del proveedor, alias y normalización", () => {
 
 test("La Matanza exige localidad clasificada; CP solo como apoyo", () => {
   const base = { province: "Buenos Aires", municipality: "La Matanza" };
-  assert.equal(detectFlexZone({ ...base, city: "González Catán" }).zone, "CORDON_2");
+  for (const city of ["San Justo", "Ramos Mejía", "Villa Luzuriaga", "Lomas del Mirador", "La Tablada", "Tapiales", "Ciudad Madero", "Villa Madero", "Villa Celina", "Aldo Bonzi", "Ciudad Evita"])
+    assert.equal(detectFlexZone({ ...base, city }).zone, "CORDON_1", city);
+  for (const city of ["Isidro Casanova", "Rafael Castillo", "Gregorio de Laferrere", "Laferrere", "González Catán", "Virrey del Pino", "20 de Junio"])
+    assert.equal(detectFlexZone({ ...base, city }).zone, "CORDON_2", city);
   for (const city of [undefined, "Desconocida"])
     assert.equal(detectFlexZone({ ...base, city }).zone, undefined);
   assert.equal(detectFlexZone({ ...base, postalCode: "B1753ABC" }).zone, "CORDON_1");

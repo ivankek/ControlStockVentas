@@ -12,8 +12,8 @@ export const FLEX_DISTRICTS: Record<Exclude<FlexZone, "CABA">, string[]> = {
 };
 // Locality split is deliberately explicit: unknown La Matanza localities never inherit a district default.
 export const MATANZA_LOCALITIES: Record<"CORDON_1" | "CORDON_2", string[]> = {
-  CORDON_1: ["Villa Luzuriaga", "Ramos Mejía", "Lomas del Mirador", "La Tablada", "Tapiales", "Aldo Bonzi", "San Justo", "Ciudad Madero", "Villa Madero", "Villa Eduardo Madero", "Villa Celina"],
-  CORDON_2: ["Isidro Casanova", "Rafael Castillo", "Gregorio de Laferrere", "Laferrere", "Ciudad Evita", "González Catán", "Virrey del Pino", "20 de Junio", "Veinte de Junio"],
+  CORDON_1: ["San Justo", "Ramos Mejía", "Villa Luzuriaga", "Lomas del Mirador", "La Tablada", "Tapiales", "Ciudad Madero", "Villa Madero", "Villa Eduardo Madero", "Villa Celina", "Aldo Bonzi", "Ciudad Evita"],
+  CORDON_2: ["Isidro Casanova", "Rafael Castillo", "Gregorio de Laferrere", "Laferrere", "González Catán", "Virrey del Pino", "20 de Junio", "Veinte de Junio"],
 };
 export const FLEX_LOCALITIES: Record<string, string[]> = {
   "Lomas de Zamora": ["Banfield", "Banfield Oeste", "Banfield Este", "Temperley", "Llavallol", "Turdera", "Villa Centenario", "Villa Fiorito", "Ingeniero Budge"],
