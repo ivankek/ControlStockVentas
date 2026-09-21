@@ -126,13 +126,13 @@ export async function verifiedOrder(user: string, id: string, accountId?: string
 type Search = { results: RawOrder[]; paging: { total: number } };
 // Only one sync per account in this Node process. Database writes are separately atomic.
 const running = new Set<string>();
-export async function importOrders(user: string, previous: State, queryDate?: string, accountId?: string) {
+export async function importOrders(user: string, previous: State, queryDate?: string, accountId?: string, queryFrom?: string) {
   if (running.has(user)) throw Error("Ya hay una actualización en curso.");
   running.add(user);
   try {
     const tokens = await access(user, accountId);
     const raw = new Map<string, RawOrder>();
-    const from = new Date((queryDate ? Date.parse(`${queryDate}T00:00:00-03:00`) : Date.now()) - 90 * 86400000).toISOString();
+    const from = new Date((queryDate ? Date.parse(`${queryFrom ?? queryDate}T00:00:00-03:00`) : Date.now()) - 90 * 86400000).toISOString();
     const until = queryDate ? `&order.date_created.to=${encodeURIComponent(`${queryDate}T23:59:59.999-03:00`)}` : "";
     let total = Infinity;
     for (let offset = 0; offset < total; offset += 50) {

@@ -11,6 +11,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
     t.after(() => { if (old === undefined) delete process.env[key]; else process.env[key] = old; });
   }
   const calls: string[] = [];
+  let expectedFrom = "2026-06-16T03:00:00.000Z";
   const tokens = seal({ access_token: "test", refresh_token: "test", expires_at: Date.now() + 3600000, user_id: 42 });
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -25,7 +26,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
     else if (url.pathname === "/rest/v1/meli_listings") body = [];
     else if (url.pathname === "/orders/search") {
       assert.equal(url.searchParams.get("order.date_created.to"), "2026-09-14T23:59:59.999-03:00");
-      assert.equal(url.searchParams.get("order.date_created.from"), "2026-06-16T03:00:00.000Z");
+      assert.equal(url.searchParams.get("order.date_created.from"), expectedFrom);
       body = { paging: { total: 4 }, results: [1, 2, 3, 4].map((id) => ({
         id, status: id === 4 ? "cancelled" : "paid", date_created: "2026-09-12T15:00:00Z", seller: { id: 42 },
         shipping: id === 3 ? null : { id }, order_items: [{ item: { id: "MLA1", title: "Producto" }, quantity: 2 }],
@@ -40,7 +41,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
     } else throw Error(`Consulta inesperada: ${url.pathname}`);
     return Response.json(body);
   });
-  const request = (date: string) => new Request("https://app.test/api/sync", { method: "POST", headers: { Authorization: "Bearer test" }, body: JSON.stringify({ date }) });
+  const request = (date: string, from?: string) => new Request("https://app.test/api/sync", { method: "POST", headers: { Authorization: "Bearer test" }, body: JSON.stringify({ date, from }) });
   const response = await POST(request("2026-09-14"));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
@@ -56,6 +57,13 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   assert.deepEqual(data.unverified.map((o: { id: string }) => o.id), ["3"]);
   assert.ok(data.supplier);
   assert.equal(data.supplier.complete, false);
+  expectedFrom = "2026-06-15T03:00:00.000Z";
+  const range = await POST(request("2026-09-14", "2026-09-13"));
+  assert.equal(range.status, 200);
+  const rangeData = await range.json();
+  assert.deepEqual(rangeData.orders.map((o: { id: string }) => o.id).sort(), ["1", "2", "4"]);
+  assert.deepEqual(rangeData.days.map((d: { date: string }) => d.date), ["2026-09-13", "2026-09-14"]);
+  assert.equal((await POST(request("2026-09-13", "2026-09-14"))).status, 400);
   assert.equal((await POST(request("invalid"))).status, 400);
   assert.equal((await POST(request("2999-01-01"))).status, 400);
 });
