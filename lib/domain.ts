@@ -18,6 +18,7 @@ export type Order = {
   postalCode?: string;
   latitude?: number;
   longitude?: number;
+  georef?: import("./flex-zones").FlexDetection;
   mode: Mode;
   createdAt: string;
   expectedDate?: string;

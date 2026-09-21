@@ -35,8 +35,8 @@ export const FLEX_LOCALITIES: Record<string, string[]> = {
 };
 // Postal codes alone may cover several localities. Only explicitly verified entries belong here.
 export const FLEX_POSTAL_LOCALITIES: Record<string, string> = { "1753": "Villa Luzuriaga" };
-export type FlexDestination = { province?: string; municipality?: string; city?: string; neighborhood?: string; postalCode?: string; latitude?: number; longitude?: number };
-export type FlexDetection = { zone?: FlexSelection; method: "manual" | "province" | "municipality" | "locality" | "postal" | "unknown"; reason: string };
+export type FlexDestination = { province?: string; municipality?: string; city?: string; neighborhood?: string; postalCode?: string; latitude?: number; longitude?: number; georef?: FlexDetection };
+export type FlexDetection = { zone?: FlexSelection; method: "manual" | "province" | "municipality" | "locality" | "postal" | "unknown" | "georef-coordinates" | "georef-address" | "georef-locality"; reason: string };
 const includes = (names: string[], value?: string) => !!value && names.some((name) => normalizePlace(name) === normalizePlace(value));
 // Mercado Libre sometimes appends a neighborhood to the locality, e.g. "Villa Tesei barrio Asunción".
 const localityIncludes = (names: string[], value?: string) => {
@@ -48,6 +48,7 @@ const districtZone = (value?: string): FlexZone | undefined => FLEX_ZONES.find((
 const matanzaZone = (value?: string): FlexZone | undefined => (["CORDON_1", "CORDON_2"] as const).find((zone) => includes(MATANZA_LOCALITIES[zone], value));
 export function detectFlexZone(destination: FlexDestination, manual?: FlexSelection): FlexDetection {
   if (manual) return { zone: manual, method: "manual", reason: "Selección manual" };
+  if (destination.georef) return destination.georef;
   const unknown = (reason: string): FlexDetection => ({ method: "unknown", reason });
   if (caba(destination.province)) return { zone: "CABA", method: "province", reason: "Provincia: CABA / Capital Federal" };
   // Never classify names shared with other provinces as AMBA.

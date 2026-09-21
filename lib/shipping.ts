@@ -1,5 +1,5 @@
 import { localDate } from "./domain";
-type ShippingAddress = { receiver_name?: string; state?: { name?: string }; city?: { name?: string }; municipality?: { name?: string }; neighborhood?: { name?: string }; zip_code?: string; latitude?: number; longitude?: number };
+type ShippingAddress = { street_name?: string; street_number?: string | number; receiver_name?: string; state?: { name?: string }; city?: { name?: string }; municipality?: { name?: string }; neighborhood?: { name?: string }; zip_code?: string; latitude?: number; longitude?: number };
 export type Shipment = {
   id: number;
   status: string;

@@ -1,6 +1,7 @@
 import { access, get, type RawOrder } from "./meli";
 import { shipmentDestination, normalizeShipment, type Shipment } from "./shipping";
 import type { Sale } from "./profit";
+import { createGeorefResolver } from "./georef";
 export const amountCents = (value: unknown): number | undefined => typeof value === "number" && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100)) ? Math.round(value * 100) : undefined;
 
 async function paymentNet(id: number, seller: number, token: string): Promise<number | undefined> {
@@ -20,6 +21,7 @@ export async function salesPage(user: string, from: string, to: string, offset: 
   if (!Array.isArray(page.results) || !Number.isInteger(page.paging?.total) || page.paging.total < 0 || (!page.results.length && offset < page.paging.total)) throw Error("La consulta de ventas quedó incompleta.");
   if (page.paging.total > 10000) return { splitRequired: true, sales: [], total: page.paging.total, nextOffset: null };
   const sales: Sale[] = [];
+  const resolveGeoref = createGeorefResolver();
   const shipments = new Map<string, Promise<Shipment>>();
   const payments = new Map<number, Promise<number | undefined>>();
   // Small batches avoid saturating either service. Results stay in memory only.
@@ -35,6 +37,7 @@ export async function salesPage(user: string, from: string, to: string, offset: 
         sale.shipmentId = id;
         sale.mode = shipment.logistic_type === "self_service" ? "flex" : shipment.mode === "me2" ? "correo" : "acordar";
         Object.assign(sale, shipmentDestination(shipment)); sale.shippingStatus = shipment.status;
+        sale.georef = await resolveGeoref(shipment);
         if (shipment.logistic_type === "fulfillment") sale.review = "Full: revisar costos logísticos";
       }
       const approved = (raw.payments ?? []).filter((payment) => payment.status === "approved");
