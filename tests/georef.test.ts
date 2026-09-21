@@ -31,11 +31,26 @@ test("La Matanza without a classified locality stays unknown", async () => {
   const result = await createGeorefResolver(mock({ ubicacion: row("", "La Matanza") }))(shipment("Desconocida", { latitude: -34.7, longitude: -58.5 }));
   assert.equal(result?.zone, undefined);
 });
+test("La Matanza uses the more precise ML neighborhood", async () => {
+  const resolver = createGeorefResolver(mock({ total: 1, localidades: [{ ...row("Villa Luzuriaga", "La Matanza") }] }));
+  const result = await resolver(shipment("La Matanza", { neighborhood: { name: "Villa Luzuriaga" } }));
+  assert.equal(result?.zone, "CORDON_1");
+  assert.match(result!.reason, /Villa Luzuriaga/);
+});
 test("exact street number and locality resolve address, fuzzy matches do not", async () => {
   const resolver = createGeorefResolver(mock({ direcciones: [{ ...row("", "Avellaneda"), localidad: { nombre: "Wilde" }, calle: { nombre: "GUAMINI" }, altura: { valor: 5945 } }] }));
   const result = await resolver(shipment("Wilde", { street_name: "Guaminí", street_number: "5945" }));
   assert.equal(result?.method, "georef-address");
   assert.equal(result?.zone, "CORDON_1");
+});
+test("official ML address_line is usable when split street fields are absent", async () => {
+  let requested = "";
+  const resolver = createGeorefResolver((async (url) => {
+    requested = String(url);
+    return Response.json({ direcciones: [{ ...row("", "Avellaneda"), localidad: { nombre: "Wilde" }, calle: { nombre: "GUAMINI" }, altura: { valor: 5945 } }] });
+  }) as typeof fetch);
+  assert.equal((await resolver(shipment("Wilde", { address_line: "Guaminí 5945" })))?.zone, "CORDON_1");
+  assert.match(decodeURIComponent(requested), /direccion=Guaminí\+5945/);
 });
 test("outage preserves aliases and opens circuit; known municipalities skip Georef", async () => {
   let calls = 0;

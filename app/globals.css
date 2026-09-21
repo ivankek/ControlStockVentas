@@ -691,6 +691,12 @@ h1 { margin-bottom: 6px; font-size: 30px; }
 .profit-table td:nth-child(10) { min-width: 170px; }
 .profit-table strong { display: block; font-size: 13px; }
 .profit-table small { display: block; margin-top: 5px; color: var(--muted); line-height: 1.35; }
+.shipping-kind { display: inline-flex; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.shipping-kind.flex { background: #dcfce7; color: #166534; }
+.shipping-kind.correo { background: #dbeafe; color: #1e40af; }
+.shipping-kind.acordar { background: #f1f5f9; color: #475569; }
+.shipping-kind.cancelled { background: #fee2e2; color: #991b1b; }
+.profit-table small.zone-reason { max-width: 190px; color: #92400e; }
 .profit-table .sale-detail { margin: 0; }
 .profit-table .sale-detail summary { white-space: nowrap; }
 .profit-table .sale-detail ul { padding-left: 17px; min-width: 230px; }

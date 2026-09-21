@@ -10,8 +10,9 @@ const same = (a?: string, b?: string) => !!a && !!b && normalizePlace(a) === nor
 function classify(row: Location, dest: FlexDestination, method: FlexDetection["method"]): FlexDetection | undefined {
   if (!row.provincia?.nombre || !row.departamento?.nombre) return;
   const municipality = row.departamento.nombre;
+  const genericMatanza = same(dest.city, "La Matanza");
   const result = detectFlexZone({ province: row.provincia.nombre, municipality,
-    city: row.localidad?.nombre ?? row.nombre ?? dest.city, neighborhood: dest.neighborhood });
+    city: row.localidad?.nombre ?? row.nombre ?? (genericMatanza ? dest.neighborhood : dest.city), neighborhood: dest.neighborhood });
   return { ...result, method, reason: `Georef: ${municipality}${row.localidad?.nombre || row.nombre ? ` · ${row.localidad?.nombre ?? row.nombre}` : ""}. ${result.reason}` };
 }
 
@@ -26,7 +27,7 @@ export function createGeorefResolver(fetcher: typeof fetch = fetch) {
     const direct = detectFlexZone(dest);
     if (direct.zone && (direct.method === "province" || direct.method === "municipality" || (same(dest.municipality, "La Matanza") && direct.method === "locality"))) return;
     const address = shipment.destination?.shipping_address ?? shipment.receiver_address;
-    const key = JSON.stringify([dest, address?.street_name, address?.street_number]);
+    const key = JSON.stringify([dest, address?.address_line, address?.street_name, address?.street_number]);
     if (memo.has(key)) return memo.get(key)!;
     const pending = (async (): Promise<FlexDetection | undefined> => {
       if (unavailable) return;
@@ -48,10 +49,13 @@ export function createGeorefResolver(fetcher: typeof fetch = fetch) {
         }
         // Scope text searches to a known province; names alone are not geographic evidence.
         const province = same(dest.province, "Buenos Aires") || same(dest.province, "Provincia de Buenos Aires") ? "06" : undefined;
-        const city = dest.city || dest.neighborhood;
+        // ML sometimes sends the partido as city and the actual locality as neighborhood.
+        const city = same(dest.city, "La Matanza") && dest.neighborhood ? dest.neighborhood : dest.city || dest.neighborhood;
         if (!province || !city) return geographic;
-        const street = address?.street_name?.trim();
-        const height = String(address?.street_number ?? "").trim();
+        const line = address?.address_line?.trim() ?? "";
+        const parsed = line.match(/^(.*?)\s+(\d+)$/);
+        const street = address?.street_name?.trim() || parsed?.[1]?.trim();
+        const height = String(address?.street_number ?? parsed?.[2] ?? "").trim();
         if (street && /^\d+$/.test(height)) {
           const data = await query("direcciones", { direccion: `${street} ${height}`, provincia: province, localidad: city, max: "100" });
           const rows: Location[] = Array.isArray(data.direcciones) ? data.direcciones : [];
