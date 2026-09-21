@@ -42,11 +42,11 @@ test("neto resta costo por unidades y logística propia una vez, sin volver a re
   const rows = profitRows(s, orders);
   assert.equal(rows[0].gross, 10000);
   assert.equal(rows[0].supplier, 4000);
-  assert.equal(rows[0].shipping, 500000);
-  assert.equal(rows[0].net, -496000);
+  assert.equal(rows[0].shipping, 420000);
+  assert.equal(rows[0].net, -416000);
   assert.equal(rows[1].net, 4000);
   assert.equal(profitRows(s, [sale()])[0].net, 4000);
-  assert.equal(profitRows(s, [sale({ mode: "flex" })])[0].shipping, 500000, "Flex sin localidad también usa la tarifa provisoria");
+  assert.equal(profitRows(s, [sale({ mode: "flex" })])[0].shipping, undefined, "Flex sin localidad queda pendiente");
 });
 
 test("importes faltantes, reembolsos y pagos compartidos no se convierten en ganancia", () => {

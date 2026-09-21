@@ -35,7 +35,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
       const id = Number(url.pathname.split("/").at(-1));
       body = id === 4
         ? { id, status: "delivered", mode: "me2", logistic_type: "self_service" }
-        : { id, status: "delivered", logistic: { mode: "me2", type: id === 1 ? "self_service" : "drop_off" }, lead_time: { estimated_delivery_time: { date: "2026-09-15T18:00:00Z" } } };
+        : { id, status: "delivered", destination: { shipping_address: { state: { name: "Buenos Aires" }, municipality: { name: "La Matanza" }, city: { name: "Villa Luzuriaga" }, zip_code: "1753" } }, logistic: { mode: "me2", type: id === 1 ? "self_service" : "drop_off" }, lead_time: { estimated_delivery_time: { date: "2026-09-15T18:00:00Z" } } };
     } else if (/^\/shipments\/\d+\/history$/.test(url.pathname)) {
       body = [{ status: "shipped", date: url.pathname.includes("/2/") ? "2026-09-14T02:30:00Z" : "2026-09-15T02:30:00Z" }, { status: "delivered", date: "2026-09-15T18:00:00Z" }];
     } else throw Error(`Consulta inesperada: ${url.pathname}`);
@@ -49,6 +49,9 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   assert.deepEqual(data.orders.map((o: { id: string }) => o.id), ["1", "4"]);
   assert.equal(data.orders[0].shippingStatus, "delivered");
   assert.equal(data.orders[0].mode, "flex");
+  assert.equal(data.orders[0].municipality, "La Matanza");
+  assert.equal(data.flex["1"].zone, "CORDON_1");
+  assert.equal(data.flex["1"].cents, 364000);
   assert.equal(data.orders[0].dispatchedDate, "2026-09-14");
   assert.equal(data.orders[0].expectedDate, "2026-09-15");
   assert.ok(calls.includes("/shipments/1/history"));

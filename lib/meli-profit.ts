@@ -1,5 +1,5 @@
 import { access, get, type RawOrder } from "./meli";
-import { normalizeShipment, type Shipment } from "./shipping";
+import { shipmentDestination, normalizeShipment, type Shipment } from "./shipping";
 import type { Sale } from "./profit";
 export const amountCents = (value: unknown): number | undefined => typeof value === "number" && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100)) ? Math.round(value * 100) : undefined;
 
@@ -34,8 +34,7 @@ export async function salesPage(user: string, from: string, to: string, offset: 
         const shipment = await shipments.get(id)!;
         sale.shipmentId = id;
         sale.mode = shipment.logistic_type === "self_service" ? "flex" : shipment.mode === "me2" ? "correo" : "acordar";
-        const address = shipment.destination?.shipping_address ?? shipment.receiver_address;
-        sale.city = address?.city?.name; sale.province = address?.state?.name; sale.shippingStatus = shipment.status;
+        Object.assign(sale, shipmentDestination(shipment)); sale.shippingStatus = shipment.status;
         if (shipment.logistic_type === "fulfillment") sale.review = "Full: revisar costos logísticos";
       }
       const approved = (raw.payments ?? []).filter((payment) => payment.status === "approved");

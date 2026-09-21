@@ -12,7 +12,7 @@ export function dispatchQueryResult(result: { orders: Order[]; products: Product
   };
 }
 export type DispatchDay = { date: string; supplier: ReturnType<typeof import("./supplier").supplierReport> };
-export type DispatchQueryResult = ReturnType<typeof dispatchQueryResult> & { days?: DispatchDay[]; notes?: Record<string, import("./business").OrderNote>; supplier?: ReturnType<typeof import("./supplier").supplierReport> };
+export type DispatchQueryResult = ReturnType<typeof dispatchQueryResult> & { flex?: Record<string, ReturnType<typeof import("./business").resolveFlex>>; days?: DispatchDay[]; notes?: Record<string, import("./business").OrderNote>; supplier?: ReturnType<typeof import("./supplier").supplierReport> };
 
 export function dispatchMessage(days: DispatchDay[]) {
   const amount = (cents: number) => "$" + new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(cents / 100);

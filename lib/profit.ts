@@ -1,9 +1,7 @@
 import { localDate, type Order, type State } from "./domain";
-import { emptyBusiness, type Business } from "./business";
+import { emptyBusiness, resolveFlex, resolveFlexShipments, type Business } from "./business";
 import { supplierReport } from "./supplier";
-
 export type Sale = Order & { grossCents?: number; receivedCents?: number; paymentIds: string[]; issues: string[] };
-export const DEFAULT_FLEX_CENTS = 500000;
 export function monthlyExpenses(business: Business, from: string, to: string) {
   let tax = 0, billing = 0;
   for (let day = from; day <= to; day = new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10)) {
@@ -33,6 +31,7 @@ export function profitRows(state: State, sales: Sale[]) {
   const paymentCounts = new Map<string, number>();
   for (const sale of sales) for (const id of new Set(sale.paymentIds)) paymentCounts.set(id, (paymentCounts.get(id) ?? 0) + 1);
   const shipments = new Set<string>();
+  const flexByOrder = resolveFlexShipments(business, sales);
   return [...sales].sort((a, b) => a.id.localeCompare(b.id)).map((sale) => {
     const date = localDate(sale.createdAt);
     const note = business.notes[sale.id];
@@ -44,9 +43,12 @@ export function profitRows(state: State, sales: Sale[]) {
     issues.push(...supplier.missing);
     if (sale.orderStatus !== "paid") issues.push("Cancelación o devolución: revisar ingresos y costos manualmente");
     let shipping: number | undefined = 0;
+    let flex: ReturnType<typeof resolveFlex> | undefined;
     if (sale.mode === "flex") {
       const key = sale.shipmentId ?? sale.id;
-      shipping = shipments.has(key) ? 0 : DEFAULT_FLEX_CENTS;
+      flex = flexByOrder[sale.id];
+      shipping = flex.cents === undefined ? undefined : shipments.has(key) ? 0 : flex.cents;
+      if (shipping === undefined) issues.push("Zona Flex desconocida: seleccioná la zona manualmente");
       shipments.add(key);
     } else if (sale.mode === "acordar") {
       shipping = note?.shippingCents;
@@ -54,7 +56,7 @@ export function profitRows(state: State, sales: Sale[]) {
     }
     const usable = sale.orderStatus === "paid" && !supplier.missing.length && received !== undefined && shipping !== undefined && !sale.review;
     if (sale.review) issues.push(sale.review);
-    return { sale, date, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
+    return { sale, date, flex, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
   });
 }
 export function reportTotals(rows: ReturnType<typeof profitRows>, business: Business, from: string, to: string) {

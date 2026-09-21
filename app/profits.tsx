@@ -5,6 +5,7 @@ import { emptyState, money, today, type State } from "@/lib/domain";
 import { emptyBusiness } from "@/lib/business";
 import { profitRows, reportTotals, expenseBreakdown, type Sale } from "@/lib/profit";
 import { queryProfitSales } from "@/lib/profit-query";
+import { FLEX_LABELS } from "@/lib/flex-zones";
 import OrderNoteEditor from "./order-note";
 
 const shift = (date: string, days: number) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
@@ -117,6 +118,7 @@ export default function Profits({ token }: { token?: string }) {
           {net && <details className="sale-detail"><summary>Revisar y completar importes{row.issues.length ? ` · ${row.issues.length} pendientes` : ""}</summary>
             {!!row.issues.length && <ul>{row.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
             <p>El neto de esta venta todavía no descuenta los gastos mensuales. Esos gastos se restan una sola vez del total del período.</p>
+            {row.flex && <p>Flex: {row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida"} · {row.flex.reason}{row.flex.baselineRate ? " · tarifa base estimada" : ""}{row.shipping === 0 && row.flex.cents ? " · costo incluido en otra orden del envío" : ""}</p>}
             <OrderNoteEditor financial order={row.sale} note={business.notes[row.sale.id]} token={token} onSaved={() => void refreshCosts()} />
           </details>}
         </article>)}</div>

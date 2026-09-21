@@ -13,6 +13,11 @@ export type Order = {
   receiverName?: string;
   province?: string;
   city?: string;
+  municipality?: string;
+  neighborhood?: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
   mode: Mode;
   createdAt: string;
   expectedDate?: string;

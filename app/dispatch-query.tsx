@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { today, money } from "@/lib/domain";
 import type { Order } from "@/lib/domain";
 import { dispatchMessage, type DispatchQueryResult } from "@/lib/dispatch-query";
+import { FLEX_LABELS } from "@/lib/flex-zones";
 import OrderNoteEditor from "./order-note";
 
 const statuses: Record<string, string> = {
@@ -81,7 +82,8 @@ export default function DispatchQuery({ token }: { token?: string }) {
       <small>{mode}</small>
       {o.cancelled && <small>Venta cancelada: revisar antes de pagar al proveedor.</small>}
       {o.dispatchedDate && <small>Despacho registrado: {o.dispatchedDate.split("-").reverse().join("/")} · {o.evidence === "Confirmado manualmente" ? "Confirmación manual" : "Mercado Libre"}</small>}
-      {o.mode === "acordar" && <OrderNoteEditor key={`${o.id}-${result?.notes?.[o.id]?.updatedAt}`} order={o} note={result?.notes?.[o.id]} token={token} onSaved={() => void consult()} />}
+      {o.mode === "flex" && <small>Zona Flex: {result?.flex?.[o.id]?.zone ? FLEX_LABELS[result.flex[o.id].zone!] : "Desconocida"} · {result?.flex?.[o.id]?.cents === undefined ? "Costo pendiente" : money(result.flex[o.id].cents!)} · {result?.flex?.[o.id]?.reason}</small>}
+      {(o.mode === "acordar" || o.mode === "flex") && <OrderNoteEditor key={`${o.id}-${result?.notes?.[o.id]?.updatedAt}`} order={o} note={result?.notes?.[o.id]} token={token} onSaved={() => void consult()} />}
       {o.review && <small>{o.review}</small>}
       {cost && <p><strong>{cost.missing.length || cost.review ? "Costo parcial / a revisar" : "Costo del proveedor"}: {money(cost.totalCents)}</strong></p>}
       {cost?.missing.map((text) => <small key={text}>{text}</small>)}

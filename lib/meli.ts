@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { accountFor, sellerProfile } from "./inventory-server";
 import { seal, unseal } from "./crypto";
 import { flexDate, localDate, Order, Product, State } from "./domain";
-import { dispatchEvidence, normalizeShipment, History, Shipment } from "./shipping";
+import { shipmentDestination, dispatchEvidence, normalizeShipment, History, Shipment } from "./shipping";
 type Tokens = {
   access_token: string;
   refresh_token: string;
@@ -225,10 +225,8 @@ export async function importOrders(user: string, previous: State, queryDate?: st
           shipments.set(sid, info);
         }
         const s = info.shipment;
-        const address = s.destination?.shipping_address ?? s.receiver_address;
         order.receiverName = s.destination?.receiver_name ?? s.receiver_address?.receiver_name;
-        order.province = address?.state?.name;
-        order.city = address?.city?.name;
+        Object.assign(order, shipmentDestination(s));
         order.shippingStatus = s.status;
         order.shipmentId = sid;
         order.mode =
