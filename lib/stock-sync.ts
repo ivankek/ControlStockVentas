@@ -41,7 +41,7 @@ async function request(itemId: string, token: string, body?: unknown) {
   }
   return response.json();
 }
-export async function syncNextStock(actor: string, retry = false) {
+export async function syncNextStock(actor: string | null, retry = false) {
   const db = admin();
   const claimed = await db.rpc("claim_stock_sync", { p_actor: actor, p_retry: retry });
   if (claimed.error) throw Error("No se pudo iniciar la sincronización. Verificá la migración de stock.");

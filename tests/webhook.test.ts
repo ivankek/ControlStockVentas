@@ -1,9 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { POST } from "../app/api/meli/webhooks/route";
+import { receiveNotification } from "../lib/meli-notification-handler";
 import { MAX_NOTIFICATION_BYTES } from "../lib/meli-webhook";
 
-test("webhook: acepta envelopes variables sin efectos ni secretos en logs", async (t) => {
+test("webhook: persiste órdenes antes del ACK sin confiar en datos del aviso ni filtrar secretos", async (t) => {
+  const queued: string[][] = [];
+  let schedules = 0, unavailable = false;
+  const POST = (request: Request) => receiveNotification(request, {
+    enqueue: async (...args) => { if (unavailable) throw Error("SECRET_DATABASE_ERROR"); queued.push(args); return true; },
+    schedule: () => { assert.ok(queued.length); schedules++; },
+  });
   const oldId = process.env.MELI_CLIENT_ID;
   process.env.MELI_CLIENT_ID = "123456";
   t.after(() => {
@@ -37,6 +43,17 @@ test("webhook: acepta envelopes variables sin efectos ni secretos en logs", asyn
   await t.test("repetidos e identificadores opcionales", async () => {
     for (const extra of [{}, { _id: "repeated" }, { _id: "repeated" }])
       assert.equal((await send({ ...envelope, ...extra })).status, 200);
+    assert.equal(schedules, 3);
+    assert.deepEqual(queued, [["987", "987"], ["987", "987"], ["987", "987"]]);
+  });
+  await t.test("sin persistencia no confirma; recursos ajenos no se consultan", async () => {
+    unavailable = true;
+    assert.equal((await send(envelope)).status, 503);
+    for (const resource of ["https://attacker/orders/987", "/orders/987/../../users", "/orders/0"]) {
+      assert.equal((await send({ ...envelope, resource })).status, 200);
+    }
+    assert.equal(schedules, 3);
+    unavailable = false;
   });
   await t.test("rechaza JSON inválido y estructura incompleta", async () => {
     for (const payload of [null, [], "text", {}, { ...envelope, topic: "" }, { ...envelope, user_id: -1 }, { ...envelope, application_id: Number.MAX_SAFE_INTEGER + 1 }])

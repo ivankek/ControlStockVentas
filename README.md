@@ -46,7 +46,7 @@ npm run build
 - Historial de estados, fechas y cantidades de la API deben verificarse en esta cuenta antes de uso operativo. Full y casos no contemplados aparecen como incidencias.
 - Un cierre guarda una instantánea de líneas, costos e IDs; un cambio de costo no altera pagos previos. Los cierres solo incluyen pedidos no pagados. Las escrituras usan control de versión atómico en PostgreSQL para evitar dobles cierres concurrentes.
 - Cancelaciones y reembolsos se señalan. No se descuentan automáticamente de un pago anterior: acordar el ajuste con el proveedor. El registro de notas de crédito y la reversión de pagos erróneos quedan para una siguiente iteración.
-- El importador serializa solicitudes por usuario dentro del proceso Node. Antes de desplegar múltiples instancias, agregar bloqueo distribuido para la renovación de OAuth y una cola de sincronización; elegir hosting con duración suficiente para el volumen de pedidos. No hay sincronización programada todavía.
+- El inventario usa colas persistentes y bloqueos en PostgreSQL para sincronizar stock entre cuentas. La renovación de OAuth también tiene bloqueo distribuido. El descuento por ventas y su proceso periódico requieren la activación de [Stock por ventas](docs/stock-por-ventas.md).
 - El estado del negocio se guarda como documento JSONB por cuenta en PostgreSQL, con control de versión. Adecuado para el piloto; normalizar pedidos y costos e indexar por fecha antes de un crecimiento significativo.
 
 ## Referencias oficiales

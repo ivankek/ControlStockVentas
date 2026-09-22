@@ -6,7 +6,9 @@ La pantalla **Stock** reúne productos, SKU obligatorio, precio unitario con vig
 - USER consulta el catálogo de proveedores con relación activa y asocia sus propias publicaciones desde Publicaciones. No puede crear ni modificar productos, precios o stock.
 - ADMIN administra todos los proveedores y sus relaciones con vendedores.
 
-El precio y el stock de un producto se guardan en una transacción; el control de versión impide sobrescribir una edición concurrente. Los precios conservan fechas de vigencia. Cambiar stock registra un movimiento. El stock aún no se sincroniza automáticamente con Mercado Libre.
+El precio y el stock de un producto se guardan en una transacción; el control de versión impide sobrescribir una edición concurrente. Los precios conservan fechas de vigencia. Cambiar stock registra un movimiento y encola la actualización de todas las publicaciones asociadas, incluidas ofertas de catálogo compatibles. Asociar una publicación también encola su actualización.
+
+Las ventas pagadas descuentan el stock compartido y propagan la cantidad restante a las cuentas vinculadas. Requiere activar el procesamiento descrito en [Stock por ventas](stock-por-ventas.md). La migración de esa etapa es aditiva: no reinicia el catálogo.
 
 ## Activación y reinicio del catálogo
 
