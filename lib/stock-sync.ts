@@ -14,7 +14,8 @@ const itemSchema = z.object({
 export function stockUpdate(raw: unknown, itemId: string, sellerId: string, targets: StockTarget[]) {
   const item = itemSchema.parse(raw);
   if (item.id !== itemId || String(item.seller_id) !== sellerId) throw Error("La publicación no pertenece a la cuenta asociada.");
-  if (item.catalog_listing) throw Error("Publicación de catálogo: sincronización todavía no implementada.");
+  // Catalog offers support available_quantity through /items too. Being in
+  // catalog is independent of Full / multi-warehouse stock restrictions below.
   if (item.shipping?.logistic_type === "fulfillment" || (item.stock_locations && JSON.stringify(item.stock_locations) !== "[]")) throw Error("Stock administrado por depósitos o Full: requiere otra modalidad de sincronización.");
   if (!["active", "paused"].includes(item.status)) throw Error("La publicación está cerrada o no admite cambios de stock en su estado actual.");
   for (const t of targets) {
