@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { canManageSupplier, desiredListingQuantity, type StockMapping, type StockVariant } from "@/lib/inventory";
+import { canManageSupplier, type StockMapping, type StockVariant } from "@/lib/inventory";
 import { costAt, money, today } from "@/lib/domain";
 import ProductEditor from "./product-editor";
 import { useInventory } from "./inventory-context";
@@ -51,7 +51,7 @@ function StockRow({ variant: v, supplier, mappings, expanded, busy, canEdit, onE
       <td>{canEdit ? <input disabled={busy} className="stock-number" aria-label={`Stock de ${v.product_name}`} type="number" min={0} max={1000000000} step={1} value={physical} onChange={(e) => setPhysical(e.target.value)} /> : v.stock}</td>
       <td><div className="stock-actions">{canEdit && <><button className="primary stock-save" disabled={busy || !changed} onClick={() => void onSave(v, amount)}>Guardar stock</button><button disabled={busy} onClick={onEdit}>Editar</button></>}<button onClick={onToggle}>{expanded ? "Ocultar" : "Publicaciones"} ({mainMappings.length})</button></div></td>
     </tr>
-    {expanded && <tr className="stock-expanded"><td colSpan={5}><strong>Publicaciones principales asociadas</strong>{mainMappings.length ? mainMappings.map((m) => <div className="stock-association" key={`${m.account_id}:${m.item_id}`}><strong>{m.title}</strong><span>{m.item_id}</span><small>{m.nickname ?? "Cuenta ML"} · Stock ML: {m.ml_quantity ?? "No disponible"} · Deseado: {desiredListingQuantity({ mode: m.mode, sellableStock: v.stock, fixedQuantity: m.fixed_quantity })}</small></div>) : <p className="table-note">No hay publicaciones asociadas.</p>}<details><summary>Historial de precios</summary>{v.costs.map((c) => <p key={c.from}>{c.from} · {money(c.cents)}</p>)}</details></td></tr>}
+    {expanded && <tr className="stock-expanded"><td colSpan={5}><strong>Publicaciones principales asociadas</strong>{mainMappings.length ? mainMappings.map((m) => <div className="stock-association" key={`${m.account_id}:${m.item_id}`}><strong>{m.title}</strong><span>{m.item_id}</span><small>{m.nickname ?? "Cuenta ML"} · Stock ML: {m.ml_quantity ?? "No disponible"} · Deseado: {v.stock}</small></div>) : <p className="table-note">No hay publicaciones asociadas.</p>}<details><summary>Historial de precios</summary>{v.costs.map((c) => <p key={c.from}>{c.from} · {money(c.cents)}</p>)}</details></td></tr>}
   </>;
 }
 

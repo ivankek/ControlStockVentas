@@ -1,0 +1,42 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+type Job = { account_id: string; item_id: string; title: string; status: string; error: string | null };
+export default function StockSync({ token, revision, onUpdated }: { token?: string; revision: unknown; onUpdated: () => void }) {
+  const updated = useRef(onUpdated);
+  updated.current = onUpdated;
+  const [jobs, setJobs] = useState<Job[]>([]), [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const retryRequested = useRef(false);
+  useEffect(() => {
+    if (!token) { setJobs([]); return; }
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function call(body?: object) {
+      const response = await fetch("/api/inventory/sync", { method: body ? "POST" : "GET", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || "No se pudo sincronizar el stock.");
+      return data as { jobs: Job[]; processed?: boolean };
+    }
+    async function tick() {
+      try {
+        let result = await call();
+        if (stopped) return;
+        const retryOne = retryRequested.current;
+        retryRequested.current = false;
+        if (retryOne || result.jobs.some((j) => ["pending", "running"].includes(j.status))) result = await call({ retry: retryOne });
+        if (!stopped) { setJobs(result.jobs); setError(""); if (result.processed) updated.current(); }
+      } catch (e) { if (!stopped) setError((e as Error).message); }
+      finally { if (!stopped) timer = setTimeout(() => void tick(), 4000); }
+    }
+    void tick();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [token, revision, retry]);
+  if (!token) return null;
+  const pending = jobs.filter((j) => ["pending", "running"].includes(j.status));
+  const failed = jobs.filter((j) => j.status === "error");
+  if (!jobs.length && !error) return null;
+  return <section className={failed.length || error ? "warning" : "notice"} aria-label="Sincronización de stock">
+    <p role="status">{error || (pending.length ? `Stock guardado. ${pending.length} publicaciones pendientes de actualizar en Mercado Libre. Mantené la app abierta hasta completar la actualización.` : failed.length ? "Hay publicaciones cuyo stock no se pudo actualizar." : "Últimas actualizaciones de stock confirmadas por Mercado Libre.")}</p>
+    {!!failed.length && <details><summary>Ver errores ({failed.length})</summary>{failed.map((j) => <p key={`${j.account_id}:${j.item_id}`}><strong>{j.item_id} · {j.title}</strong><br />{j.error}</p>)}<button onClick={() => { retryRequested.current = true; setRetry((n) => n + 1); }}>Reintentar una actualización</button></details>}
+  </section>;
+}

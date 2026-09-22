@@ -1,5 +1,6 @@
 "use client";
 import Stock from "./stock";
+import StockSync from "./stock-sync";
 import Users from "./users";
 import { InventoryContext } from "./inventory-context";
 import type { InventorySnapshot } from "@/lib/inventory";
@@ -402,6 +403,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
             </div>
           )}
           {inventory && ["Despachos", "Publicaciones", "Ganancias"].includes(tab) && <div className="toolbar"><label>Cuenta Mercado Libre<select aria-label="Cuenta Mercado Libre" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">Seleccionar cuenta</option>{ownAccounts.map((a) => <option value={a.id} key={a.id}>{a.nickname ?? "Cuenta ML"} · {a.seller_id}</option>)}</select></label>{!ownAccounts.length && <span>Conectá una cuenta desde Conexión.</span>}</div>}
+          {!demo && <StockSync token={token} revision={inventory} onUpdated={() => void inventoryCommand()} />}
           {tab === "Stock" && <Stock />}
           {tab === "Usuarios" && <Users />}
           {tab === "Publicaciones" && <Listings key={account} token={account ? token : undefined} />}
