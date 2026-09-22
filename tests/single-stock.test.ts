@@ -1,0 +1,71 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { PGlite } from "@electric-sql/pglite";
+
+test("stock único: reinicio con copia, permisos, asociaciones y edición atómica", async () => {
+  const db = new PGlite();
+  try {
+    await db.exec("create schema auth; create table auth.users(id uuid primary key,email text); create role anon; create role authenticated; create role service_role bypassrls;");
+    for (const file of ["001_initial.sql", "002_inventory.sql", "003_require_supplier_sku.sql", "004_simplify_stock.sql"]) await db.exec(await readFile(`supabase/migrations/${file}`, "utf8"));
+    const admin = randomUUID(), user = randomUUID(), supplier = randomUUID(), other = randomUUID();
+    for (const id of [admin, user, supplier, other]) await db.query("insert into auth.users values($1,'test@example.com')", [id]);
+    await db.query("update app_profiles set role='ADMIN' where id=$1", [admin]);
+    await db.query("update app_profiles set role='SUPPLIER' where id in ($1,$2)", [supplier, other]);
+    const command = (actor: string, action: object) => db.query("select inventory_command($1,$2::jsonb)", [actor, JSON.stringify(action)]);
+    const snap = async (actor: string) => (await db.query<{ s: { variants: { id: string; product_id: string; stock: number; version: number; product_name: string; costs: { from: string; cents: number }[] }[]; mappings: unknown[] } }>("select inventory_snapshot($1) s", [actor])).rows[0].s;
+    const base = { type: "product", supplierId: supplier, name: "Producto", variantName: "Única", sku: "SKU-1", date: "2026-09-01", cents: 1000, stock: 10 };
+    await command(supplier, base);
+    await command(admin, { type: "relationship", supplierId: supplier, sellerId: user, active: true });
+    const account = (await db.query<{ id: string }>("select save_meli_account($1,'42','secret','Cuenta') id", [user])).rows[0].id;
+    const listing = { id: "MLA1", seller_id: 42, title: "Publicación", available_quantity: 20, variations: [] };
+    await db.query("select save_meli_catalog($1,$2,0,$3::jsonb)", [user, account, JSON.stringify([listing])]);
+    const mapping = { type: "mapping", accountId: account, keys: ["MLA1:0"], variantId: (await snap(supplier)).variants[0].id, units: 1, mode: "REAL", fixed: null };
+    await command(user, mapping);
+    await db.query("insert into account_states(owner_id,state) values($1,$2::jsonb)", [user, JSON.stringify({ supplierProducts: [{ id: "old" }], supplierLinks: { old: {} }, business: { keep: true } })]);
+
+    await db.exec(await readFile("supabase/migrations/20260922120816_supplier_owned_single_stock.sql", "utf8"));
+    assert.equal((await snap(supplier)).variants.length, 0);
+    assert.equal((await snap(user)).mappings.length, 0);
+    const backup = (await db.query<{ n: number }>("select jsonb_array_length(products) n from inventory_archive.catalog_before_single_stock")).rows[0];
+    assert.equal(backup.n, 1);
+    assert.equal((await db.query("select * from meli_listings")).rows.length, 1);
+    assert.equal((await db.query("select * from supplier_sellers")).rows.length, 1);
+    const state = (await db.query<{ state: object }>("select state from account_states")).rows[0].state;
+    assert.deepEqual(state, { supplierProducts: [], supplierLinks: {}, business: { keep: true } });
+    const columns = (await db.query<{ column_name: string }>("select column_name from information_schema.columns where table_name='supplier_inventory'")).rows.map((r) => r.column_name);
+    assert.ok(columns.includes("stock")); assert.ok(!columns.includes("physical_stock")); assert.ok(!columns.includes("reserved_stock"));
+
+    await assert.rejects(command(user, base), /administrar/);
+    await assert.rejects(command(other, base), /administrar/);
+    await command(supplier, base);
+    let v = (await snap(supplier)).variants[0];
+    assert.equal(v.stock, 10);
+    assert.equal((await snap(user)).variants.length, 1);
+    assert.equal((await snap(other)).variants.length, 0);
+    await command(user, { ...mapping, variantId: v.id });
+    assert.equal((await snap(user)).mappings.length, 1);
+    const edit = { ...base, productId: v.product_id, variantId: v.id, expectedVersion: v.version, name: "Nuevo nombre", stock: 12, cents: 2000, date: "2026-09-22" };
+    await assert.rejects(command(user, edit), /administrar/);
+    await command(supplier, edit);
+    await assert.rejects(command(supplier, { ...edit, stock: 100 }), /producto cambió/);
+    v = (await snap(supplier)).variants[0];
+    assert.equal(v.stock, 12); assert.equal(v.costs.length, 2);
+    await assert.rejects(command(admin, { ...edit, expectedVersion: v.version, cents: -1, stock: 99 }), /check constraint/);
+    assert.equal((await snap(supplier)).variants[0].stock, 12);
+    await command(admin, { ...edit, expectedVersion: v.version, stock: 15 });
+    v = (await snap(supplier)).variants[0];
+    assert.equal(v.stock, 15);
+    const adjust = { type: "adjust", variantId: v.id, delta: -2, expectedVersion: v.version, movementType: "CORRECTION", note: "Conteo", requestId: randomUUID() };
+    await assert.rejects(command(user, adjust), /ajustar/);
+    await command(supplier, adjust); await command(supplier, adjust);
+    assert.equal((await snap(supplier)).variants[0].stock, 13);
+    await assert.rejects(command(supplier, { ...adjust, delta: -3 }), /reutilizado/);
+    await db.exec("set role authenticated");
+    await assert.rejects(command(admin, base), /permission denied/);
+    await assert.rejects(db.query("select * from supplier_inventory"), /permission denied/);
+    await assert.rejects(db.query("select * from inventory_archive.catalog_before_single_stock"), /permission denied/);
+    await db.exec("reset role");
+  } finally { await db.close(); }
+});

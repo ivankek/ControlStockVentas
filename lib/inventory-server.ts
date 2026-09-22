@@ -49,15 +49,10 @@ export async function accountListings(accountId: string): Promise<Listing[]> {
 // Adapter preserves existing dispatch/profit rules. Variant id is the cost product id.
 export async function catalogState(user: string, accountId: string): Promise<State> {
   const [{ state }, inventory, listings] = await Promise.all([readState(user), snapshot(user), accountListings(accountId)]);
-  const assigned = inventory.legacy.some((row) => row.owner_id === user && row.assigned_supplier_id);
-  const ids = new Set(listings.map((l) => l.id));
-  const legacyListings = (state.listings ?? []).filter((l) => ids.has(l.id));
-  const legacyLinks = Object.fromEntries(Object.entries(state.supplierLinks ?? {}).filter(([key]) => key.startsWith("up:") ? legacyListings.some((l) => `up:${l.user_product_id}` === key) : ids.has(key.split(":")[0])));
-  const links = assigned ? {} : legacyLinks;
+  const links: NonNullable<State["supplierLinks"]> = {};
   for (const mapping of inventory.mappings.filter((m) => m.account_id === accountId))
     links[`${mapping.item_id}:${mapping.variation_id}`] = { supplierId: mapping.variant_id, units: mapping.units_per_sale };
   return { ...state, listings, supplierLinks: links, supplierProducts: [
-    ...(!assigned ? state.supplierProducts ?? [] : []),
     ...inventory.variants.map((v) => ({ id: v.id, name: `${v.product_name}${v.name === "Única" ? "" : ` · ${v.name}`}`, costs: v.costs })),
   ] };
 }

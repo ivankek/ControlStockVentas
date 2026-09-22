@@ -5,3 +5,4 @@ node_modules/
 *.tsbuildinfo
 .sites-runtime/
 .vercel/
+supabase/.temp/

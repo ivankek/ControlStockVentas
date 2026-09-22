@@ -5,7 +5,6 @@ import { InventoryContext } from "./inventory-context";
 import type { InventorySnapshot } from "@/lib/inventory";
 import DispatchQuery from "./dispatch-query";
 import Listings from "./listings";
-import Suppliers from "./suppliers";
 import BusinessCosts from "./business-costs";
 import Profits from "./profits";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -296,13 +295,13 @@ export default function Dashboard({ configured }: { configured: boolean }) {
           {[
             { name: "Despachos", icon: Truck },
             { name: "Publicaciones", icon: Package },
-            { name: "Costos", icon: Tag },
+            ...(demo ? [{ name: "Costos", icon: Tag }] : []),
             { name: "Stock", icon: Boxes },
             ...(inventory?.profile.role === "ADMIN" ? [{ name: "Usuarios", icon: UsersRound }] : []),
             { name: "Gastos del negocio", icon: Receipt },
             { name: "Ganancias", icon: Wallet },
             { name: "Conexión", icon: Link2 },
-          ].filter(({ name }) => inventory?.profile.role !== "SUPPLIER" || ["Costos", "Stock", "Conexión"].includes(name)).map(({ name, icon: Icon }) => (
+          ].filter(({ name }) => inventory?.profile.role !== "SUPPLIER" || ["Stock", "Conexión"].includes(name)).map(({ name, icon: Icon }) => (
             <button
               className={tab === name ? "active" : ""}
               aria-current={tab === name ? "page" : undefined}
@@ -362,7 +361,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                   : tab === "Costos"
                     ? "El precio que te cobra tu proveedor por cada unidad vendida."
                   : tab === "Stock"
-                    ? "Inventario físico del proveedor, reservas y cantidades por publicación."
+                    ? "Productos del proveedor, precios y stock en un solo lugar."
                   : tab === "Usuarios"
                     ? "Roles y relaciones entre proveedores y vendedores."
                   : tab === "Gastos del negocio"
@@ -563,7 +562,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               {!!report.missing.length && (
                 <p className="warning">
                   Hay productos sin costo.{" "}
-                  <button onClick={() => setTab("Costos")}>
+                  <button onClick={() => setTab(demo ? "Costos" : "Stock")}>
                     Completar costos
                   </button>
                 </p>
@@ -663,7 +662,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               </section>
             </>
           )}
-          {tab === "Costos" && !demo && <Suppliers />}
+        {tab === "Costos" && !demo && <Stock />}
           {tab === "Costos" && demo && (
             <>
               <section className="panel">
@@ -906,7 +905,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                     </p>
                   </form>
                 )}
-                {inventory?.profile.role === "SUPPLIER" ? <p>Perfil proveedor: administrá tus productos en Costos y tu inventario en Stock.</p> : <>
+                {inventory?.profile.role === "SUPPLIER" ? <p>Perfil proveedor: creá tus productos y administrá sus precios y cantidades en Stock.</p> : <>
                 <h3>2. Mercado Libre</h3>
                 {ownAccounts.map((a) => <div className="account-card" key={a.id}><strong>{a.nickname ?? "Cuenta Mercado Libre"}</strong><p>Conectada · Seller ID: {a.seller_id}</p><small>Renová iniciando la autorización con esa misma cuenta.</small></div>)}
                 <p>
