@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { emptyBusiness, resolveFlex, type Business } from "@/lib/business";
 import { FLEX_ZONES, FLEX_LABELS } from "@/lib/flex-zones";
 import { money, today } from "@/lib/domain";
+import FlexCarrier from "./flex-carrier";
 
 export default function BusinessCosts({ token }: { token?: string }) {
   const [data, setData] = useState<Business>(emptyBusiness);
@@ -31,6 +32,7 @@ export default function BusinessCosts({ token }: { token?: string }) {
   return <>
     {!token && <p className="notice">Iniciá sesión para cargar los gastos de tu negocio.</p>}
     {message && <p className="notice" role="status">{message}</p>}
+    <FlexCarrier token={token} />
     <section className="panel"><div className="panel-title"><h2>Envíos</h2></div>
       <div className="shipping-defaults">
         {FLEX_ZONES.map((zone) => <div key={zone}><strong>Flex · {FLEX_LABELS[zone]}</strong><span>{money(resolveFlex(data, {}, today(), zone).cents!)} por envío</span>

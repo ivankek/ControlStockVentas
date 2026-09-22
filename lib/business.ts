@@ -65,7 +65,7 @@ export function resolveFlex(business: Business | undefined, destination: FlexDes
   const rate = zone && zone !== "NONE" ? business?.flexRates?.[zone]?.filter((r) => r.from <= date).sort((a, b) => b.from.localeCompare(a.from))[0] : undefined;
   return { ...detection, cents: zone === "NONE" ? 0 : zone ? rate?.cents ?? FLEX_RATES[zone] : undefined, baselineRate: !!zone && zone !== "NONE" && !rate };
 }
-export function resolveFlexShipments(business: Business | undefined, orders: Order[]) {
+export function resolveFlexShipments(business: Business | undefined, orders: Order[], dateOf = (order: Order) => localDate(order.createdAt)) {
   const groups = new Map<string, Order[]>();
   for (const order of orders.filter((o) => o.mode === "flex")) {
     const key = order.shipmentId ?? order.id;
@@ -73,7 +73,7 @@ export function resolveFlexShipments(business: Business | undefined, orders: Ord
   }
   const result: Record<string, ReturnType<typeof resolveFlex>> = {};
   for (const siblings of groups.values()) {
-    const date = siblings.map((o) => localDate(o.createdAt)).sort()[0];
+    const date = siblings.map(dateOf).sort()[0];
     const manual = [...new Set(siblings.map((o) => business?.notes[o.id]?.flexZone).filter((z) => z !== undefined))];
     const detected = siblings.map((o) => resolveFlex(business, o, date, manual[0]));
     const known = detected.filter((d) => d.zone !== undefined);
