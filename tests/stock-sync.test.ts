@@ -9,6 +9,8 @@ const targets = [{ variationId: "0", stock: 30 }];
 test("catálogo admite stock y cero; conserva validaciones de propietario, Full y depósitos", () => {
   assert.deepEqual(stockUpdate(item, item.id, "42", targets), { matches: false, body: { available_quantity: 30 } });
   assert.equal(stockUpdate({ ...item, available_quantity: 30 }, item.id, "42", targets).matches, true);
+  assert.equal(stockUpdate({ ...item, status: "closed", available_quantity: 30 }, item.id, "42", targets).matches, true);
+  assert.throws(() => stockUpdate({ ...item, available_quantity: 30 }, item.id, "99", targets), /no pertenece/);
   assert.deepEqual(stockUpdate(item, item.id, "42", [{ variationId: "0", stock: 0 }]).body, { available_quantity: 0 });
   assert.throws(() => stockUpdate(item, item.id, "99", targets), /no pertenece/);
   assert.throws(() => stockUpdate({ ...item, shipping: { logistic_type: "fulfillment" } }, item.id, "42", targets), /Full/);
@@ -24,7 +26,7 @@ test("reintentar catálogo envía PUT y solo marca éxito si Mercado Libre confi
     t.after(() => { if (old === undefined) delete process.env[key]; else process.env[key] = old; });
   }
   const encrypted = seal({ user_id: 42, access_token: "test-token", refresh_token: "test-refresh", expires_at: Date.now() + 3600000 });
-  let confirm = true, reject = false, puts = 0, reads = 0;
+  let confirm = true, reject = false, puts = 0, reads = 0, alreadyMatches = false;
   const finishes: { p_error: string | null; p_quantities: unknown[] }[] = [];
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -37,7 +39,7 @@ test("reintentar catálogo envía PUT y solo marca éxito si Mercado Libre confi
         return reject ? Response.json({}, { status: 403 }) : Response.json({ ...item, available_quantity: 30 });
       }
       reads++;
-      return Response.json({ ...item, available_quantity: reads > 1 && confirm ? 30 : 18 });
+      return Response.json({ ...item, status: alreadyMatches ? "closed" : "active", available_quantity: alreadyMatches || reads > 1 && confirm ? 30 : 18 });
     }
     if (url.pathname.endsWith("/claim_stock_sync")) {
       assert.deepEqual(JSON.parse(String(init?.body)), { p_actor: "supplier", p_retry: true });
@@ -58,8 +60,16 @@ test("reintentar catálogo envía PUT y solo marca éxito si Mercado Libre confi
   assert.equal(finishes[0].p_error, null); assert.deepEqual(finishes[0].p_quantities, targets);
   confirm = false; reads = 0;
   await syncNextStock("supplier", true);
-  assert.match(finishes[1].p_error!, /no confirmó/); assert.deepEqual(finishes[1].p_quantities, []);
+  assert.match(finishes[1].p_error!, /No se pudo confirmar/); assert.deepEqual(finishes[1].p_quantities, []);
   reject = true; reads = 0;
   await syncNextStock("supplier", true);
   assert.match(finishes[2].p_error!, /rechazó el acceso/); assert.deepEqual(finishes[2].p_quantities, []);
+  confirm = true; reads = 0;
+  await syncNextStock("supplier", true);
+  assert.equal(finishes[3].p_error, null); // Rejected response, but GET confirms the desired quantity.
+  alreadyMatches = true; reads = 0;
+  const before = puts;
+  await syncNextStock("supplier", true);
+  assert.equal(puts, before); assert.equal(reads, 1);
+  assert.equal(finishes[4].p_error, null);
 });

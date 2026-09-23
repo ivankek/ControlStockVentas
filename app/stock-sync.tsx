@@ -9,9 +9,10 @@ export default function StockSync({ token, revision, onUpdated }: { token?: stri
   const [sales, setSales] = useState<Sale[]>([]);
   const lastStatus = useRef("");
   const [retry, setRetry] = useState(0);
+  const [dismissed, setDismissed] = useState("");
   const retryRequested = useRef(false);
   useEffect(() => {
-    if (!token) { setJobs([]); setSales([]); lastStatus.current = ""; return; }
+    if (!token) { setJobs([]); setSales([]); setDismissed(""); lastStatus.current = ""; return; }
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     async function call(body?: object) {
@@ -46,7 +47,11 @@ export default function StockSync({ token, revision, onUpdated }: { token?: stri
   const saleIssues = sales.filter((s) => s.error || s.warning);
   const salePending = sales.filter((s) => s.status !== "done");
   if (!jobs.length && !sales.length && !error) return null;
+  const noticeKey = JSON.stringify([error, failed.map((j) => [j.account_id, j.item_id, j.error]).sort(), saleIssues.map((s) => [s.order_id, s.error, s.warning]).sort(), pending.map((j) => `${j.account_id}:${j.item_id}`).sort(), salePending.map((s) => s.order_id).sort()]);
+  if (dismissed === noticeKey) return <button className="sync-show" onClick={() => setDismissed("")}>Mostrar estado de sincronización</button>;
+  if (!pending.length && !failed.length && !sales.length && !error) return null;
   return <section className={failed.length || saleIssues.length || error ? "warning" : "notice"} aria-label="Sincronización de stock">
+    <button type="button" className="sync-dismiss" aria-label="Ocultar aviso de sincronización" onClick={() => setDismissed(noticeKey)}>Cerrar aviso ×</button>
     <p role="status">{error || (pending.length ? `Stock guardado. ${pending.length} publicaciones pendientes de actualizar en Mercado Libre.` : failed.length ? "Hay publicaciones cuyo stock no se pudo actualizar." : jobs.length ? "Últimas actualizaciones de stock confirmadas por Mercado Libre." : "Control de stock por ventas.")}</p>
     {!!salePending.length && <p>{salePending.length} ventas pendientes de verificar. El procesamiento continúa en segundo plano.</p>}
     {!!saleIssues.length && <details><summary>Ventas para revisar ({saleIssues.length})</summary>{saleIssues.map((s) => <p key={s.order_id}><strong>Orden {s.order_id}</strong><br />{s.error || s.warning}</p>)}</details>}

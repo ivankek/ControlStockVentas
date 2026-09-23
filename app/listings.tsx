@@ -6,6 +6,7 @@ import { listingGroups, listingKey } from "@/lib/supplier";
 import ListingBinding from "./listing-binding";
 import { useAccountPath, useInventory } from "./inventory-context";
 import { installmentLabel } from "@/lib/sale-option";
+import { listingView, type AssociationFilter, type ListingSort } from "@/lib/listing-view";
 function UnitsField({ initial }: { initial: number }) {
   const [editing, setEditing] = useState(false);
   const [units, setUnits] = useState(String(initial));
@@ -18,13 +19,15 @@ function UnitsField({ initial }: { initial: number }) {
 const statuses: Record<string, string> = { active: "Activa", paused: "Pausada", closed: "Finalizada", under_review: "En revisión", inactive: "Inactiva", payment_required: "Pago pendiente", not_yet_active: "Pendiente de activación" };
 export default function Listings({ token }: { token?: string }) {
   const path = useAccountPath();
-  const { account } = useInventory();
+  const { account, data: inventory } = useInventory();
   const [items, setItems] = useState<Listing[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [links, setLinks] = useState<NonNullable<State["supplierLinks"]>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState("");
+  const [association, setAssociation] = useState<AssociationFilter>("all");
+  const [sort, setSort] = useState<ListingSort>("original");
   const active = useRef<AbortController | null>(null);
   useEffect(() => { setItems([]); setMessage(""); if (token) void request(false); return () => active.current?.abort(); }, [token, account]);
   async function request(update: boolean) {
@@ -43,13 +46,15 @@ export default function Listings({ token }: { token?: string }) {
     } catch (error) { if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : "No se pudo completar la operación."); }
     finally { if (!controller.signal.aborted) setBusy(false); }
   }
-  const visible = listingGroups(items, links).filter((group) => group.options.some((item) => `${item.id} ${item.title}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase())));
+  const visible = listingView(items, inventory?.mappings ?? [], inventory?.variants ?? [], account, filter, association, sort);
   const price = (amount: number, currency: string) => {
     try { return new Intl.NumberFormat("es-AR", { style: "currency", currency }).format(amount); }
     catch { return `${amount} ${currency}`; }
   };
   return <>
     <div className="toolbar"><label>Buscar por título o ID<input value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
+      <label>Asociación<select value={association} onChange={(e) => setAssociation(e.target.value as AssociationFilter)}><option value="all">Todas</option><option value="none">Sin asociar</option><option value="partial">Parcialmente asociadas</option><option value="complete">Asociadas</option></select></label>
+      <label>Ordenar<select value={sort} onChange={(e) => setSort(e.target.value as ListingSort)}><option value="original">Orden original</option><option value="unlinked">Sin asociar primero</option><option value="title">Título A–Z</option><option value="title-desc">Título Z–A</option><option value="stock">Menor stock primero</option><option value="stock-desc">Mayor stock primero</option><option value="price">Menor precio primero</option><option value="price-desc">Mayor precio primero</option></select></label>
       <button className="primary" disabled={!token || !account || busy} onClick={() => void request(true)}>{busy ? "Consultando…" : items.length ? "Actualizar publicaciones" : "Importar publicaciones"}</button>
     </div>
     <p className="table-note">Las publicaciones se guardan en tu cuenta. Cada ID aparece una sola vez: solo se agregan las nuevas y se actualizan los datos que cambiaron. Los precios son de venta, no costos del proveedor.</p>
@@ -57,7 +62,8 @@ export default function Listings({ token }: { token?: string }) {
     {message && <p className="notice" role="status">{message}</p>}
     <section className="panel"><div className="panel-title"><h2>Mis publicaciones</h2><span className="pill">{items.length} guardadas</span></div>
       <p className="table-note">Agrupadas por producto de Mercado Libre o nombre exacto y variantes iguales. Una asociación aplica a todas las opciones del grupo. Actualizá para consultar cuotas y envío gratis. No se suma el stock compartido.</p>
-      {visible.map((group) => <details className="listing-group" key={group.id}><summary><strong>{group.title}</strong> · {group.options.length} opciones de venta <span className="pill listing-stock">Stock: {[...new Set(group.options.map((item) => item.available_quantity))].join(" / ")}{new Set(group.options.map((item) => item.available_quantity)).size > 1 ? " según opción" : ""}</span></summary>
+      <p className="table-note">{visible.length} grupos visibles. El orden por stock o precio usa el menor valor de las opciones del grupo.</p>
+      {visible.map((group) => <details className="listing-group" key={group.id}><summary><strong>{group.title}</strong> · {group.options.length} opciones de venta <span className="pill listing-stock">Stock: {[...new Set(group.options.map((item) => item.available_quantity))].join(" / ")}{new Set(group.options.map((item) => item.available_quantity)).size > 1 ? " según opción" : ""}</span><span className={`listing-association association-${group.association}`}>{!inventory ? "Consultando asociación…" : group.association === "none" ? "Sin producto asociado" : `${group.association === "partial" ? "Asociación parcial" : "Asociada"} · ${group.products.join(" · ")}`}</span></summary>
         {(() => {
           const physical = new Map<string, { label: string; keys: string[] }>();
           for (const item of group.options) {

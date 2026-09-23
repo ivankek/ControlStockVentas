@@ -16,13 +16,17 @@ export function stockUpdate(raw: unknown, itemId: string, sellerId: string, targ
   if (item.id !== itemId || String(item.seller_id) !== sellerId) throw Error("La publicación no pertenece a la cuenta asociada.");
   // Catalog offers support available_quantity through /items too. Being in
   // catalog is independent of Full / multi-warehouse stock restrictions below.
-  if (item.shipping?.logistic_type === "fulfillment" || (item.stock_locations && JSON.stringify(item.stock_locations) !== "[]")) throw Error("Stock administrado por depósitos o Full: requiere otra modalidad de sincronización.");
-  if (!["active", "paused"].includes(item.status)) throw Error("La publicación está cerrada o no admite cambios de stock en su estado actual.");
   for (const t of targets) {
     z.number().int().min(0).max(1000000000).parse(t.stock);
     if (t.variationId === "0" ? item.variations.length > 0 : !item.variations.some((v) => String(v.id) === t.variationId)) throw Error("Las variantes de la publicación cambiaron. Importá el catálogo y revisá la asociación.");
   }
   const matches = targets.every((t) => (t.variationId === "0" ? item.available_quantity : item.variations.find((v) => String(v.id) === t.variationId)?.available_quantity) === t.stock);
+  // Restrictions matter only if a write is needed. Ownership and variant
+  // identity must still be checked even when the quantity already matches.
+  if (!matches) {
+    if (item.shipping?.logistic_type === "fulfillment" || (item.stock_locations && JSON.stringify(item.stock_locations) !== "[]")) throw Error("Stock administrado por depósitos o Full: requiere otra modalidad de sincronización.");
+    if (!["active", "paused"].includes(item.status)) throw Error(`Esta opción está ${item.status === "closed" ? "cerrada" : `en estado ${item.status}`} y su stock difiere del solicitado. Revisá este ID en Mercado Libre; otras opciones pueden haberse actualizado.`);
+  }
   // ML requires all variation IDs in a parent PUT; omitting them can delete variants.
   const body = item.variations.length ? { variations: item.variations.map((v) => {
     const target = targets.find((t) => t.variationId === String(v.id));
@@ -30,10 +34,10 @@ export function stockUpdate(raw: unknown, itemId: string, sellerId: string, targ
   }) } : { available_quantity: targets[0]?.stock };
   return { matches, body };
 }
-async function request(itemId: string, token: string, body?: unknown) {
+async function request(itemId: string, token: string, body?: unknown, timeout = 15000) {
   const response = await fetch(`https://api.mercadolibre.com/items/${encodeURIComponent(itemId)}`, {
     method: body ? "PUT" : "GET", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "x-format-new": "true" },
-    body: body ? JSON.stringify(body) : undefined, cache: "no-store", signal: AbortSignal.timeout(15000),
+    body: body ? JSON.stringify(body) : undefined, cache: "no-store", signal: AbortSignal.timeout(timeout),
   });
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) throw Error("Mercado Libre rechazó el acceso. El vendedor debe revisar los permisos y reconectar su cuenta.");
@@ -55,9 +59,20 @@ export async function syncNextStock(actor: string | null, retry = false) {
       const current = await request(job.itemId, tokens.access_token);
       const update = stockUpdate(current, job.itemId, job.sellerId, job.targets);
       if (!update.matches) {
-        await request(job.itemId, tokens.access_token, update.body);
-        const confirmed = await request(job.itemId, tokens.access_token);
-        if (!stockUpdate(confirmed, job.itemId, job.sellerId, job.targets).matches) throw Error("Mercado Libre no confirmó la cantidad enviada. Puede requerir stock por User Product; revisá la publicación.");
+        let writeError: unknown;
+        try { await request(job.itemId, tokens.access_token, update.body); }
+        catch (e) { writeError = e; }
+        // A timeout/rejected response may happen after ML applied the write.
+        // Confirm with bounded reads, never send the PUT a second time here.
+        let confirmed = false;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt) await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+          try {
+            confirmed = stockUpdate(await request(job.itemId, tokens.access_token, undefined, 5000), job.itemId, job.sellerId, job.targets).matches;
+          } catch { /* Keep the original write error if verification also fails. */ }
+          if (confirmed) break;
+        }
+        if (!confirmed) throw writeError ?? Error("No se pudo confirmar todavía el stock solicitado en esta opción. Puede haberse aplicado; se verificará nuevamente al reintentar.");
       }
     }
   } catch (e) {

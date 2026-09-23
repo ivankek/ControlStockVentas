@@ -628,6 +628,10 @@ footer {
 .units-control input[type="number"] { width: 100px; }
 .units-control small { flex-basis: 100%; }
 .listing-stock { float: right; margin-left: 12px; }
+.listing-association { display: block; font-size: 12px; line-height: 1.5; margin-top: 4px; color: #48716a; overflow-wrap: anywhere; }
+.association-none, .association-partial { color: #946320; }
+.sync-dismiss { float: right; margin: 0 0 8px 12px; font-size: 12px; }
+.sync-show { margin: 0 0 16px; font-size: 12px; }
 .order-note { margin-top: 12px; }
 .order-note > button { padding: 5px 9px; font-size: 12px; }
 .order-note .supplier-binding { align-items: start; }
