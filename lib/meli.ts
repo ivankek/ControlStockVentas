@@ -77,7 +77,7 @@ export async function get<T>(path: string, token: string): Promise<T> {
       cache: "no-store",
       signal: AbortSignal.timeout(30000),
     });
-    if (response.ok) return response.json();
+    if (response.ok && response.status !== 206) return response.json();
     if ([429, 500, 502, 503, 504].includes(response.status) && attempt < 2) {
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
       continue;
@@ -94,6 +94,8 @@ export async function get<T>(path: string, token: string): Promise<T> {
 }
 export type RawOrder = {
   id: number;
+  pack_id?: number | null;
+  cancel_detail?: { description?: string; requested_by?: string; date?: string } | null;
   date_created: string;
   status: string;
   total_amount?: number;
@@ -155,6 +157,19 @@ export async function importOrders(user: string, previous: State, queryDate?: st
       if (!page.results.length && offset < total)
         throw Error("La lista de ventas quedó incompleta. Volvé a intentar.");
     }
+    // Search is an index: read each authoritative order before displaying its status.
+    // Limit concurrency to avoid a burst of requests for larger date ranges.
+    const ids = [...raw.keys()];
+    for (let offset = 0; offset < ids.length; offset += 4) {
+      const details = await Promise.all(ids.slice(offset, offset + 4).map(async (id) => {
+        const detail = await get<RawOrder>(`/orders/${encodeURIComponent(id)}`, tokens.access_token);
+        if (String(detail.id) !== id || detail.seller?.id !== tokens.user_id)
+          throw Error("El detalle de la venta no corresponde a la cuenta consultada.");
+        if (!detail.status) throw Error("Mercado Libre devolvió una venta sin estado actual. Volvé a consultar.");
+        return detail;
+      }));
+      for (const detail of details) raw.set(String(detail.id), detail);
+    }
     // Retain older tracked orders, including settled ones, to detect later cancellations.
     for (const o of previous.orders)
       if (!raw.has(o.id))
@@ -197,6 +212,9 @@ export async function importOrders(user: string, previous: State, queryDate?: st
       });
       const order: Order = {
         id,
+        packId: o.pack_id ? String(o.pack_id) : undefined,
+        cancellationReason: o.cancel_detail?.description,
+        cancellationRequestedBy: o.cancel_detail?.requested_by,
         orderStatus: o.status,
         buyerName: [o.buyer?.first_name, o.buyer?.last_name].filter(Boolean).join(" ").trim() || o.buyer?.nickname || undefined,
         createdAt: o.date_created,
@@ -231,6 +249,7 @@ export async function importOrders(user: string, previous: State, queryDate?: st
         Object.assign(order, shipmentDestination(s));
         order.georef = await resolveGeoref(s);
         order.shippingStatus = s.status;
+        order.shippingSubstatus = s.substatus;
         order.shipmentId = sid;
         order.mode =
           s.logistic_type === "self_service"

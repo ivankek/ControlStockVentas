@@ -12,6 +12,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   }
   const calls: string[] = [];
   let expectedFrom = "2026-06-16T03:00:00.000Z";
+  let detailFailure = false;
   const tokens = seal({ access_token: "test", refresh_token: "test", expires_at: Date.now() + 3600000, user_id: 42 });
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -28,13 +29,21 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
       assert.equal(url.searchParams.get("order.date_created.to"), "2026-09-14T23:59:59.999-03:00");
       assert.equal(url.searchParams.get("order.date_created.from"), expectedFrom);
       body = { paging: { total: 4 }, results: [1, 2, 3, 4].map((id) => ({
-        id, status: id === 4 ? "cancelled" : "paid", date_created: "2026-09-12T15:00:00Z", seller: { id: 42 },
+        id, status: "paid", date_created: "2026-09-12T15:00:00Z", seller: { id: 42 },
         shipping: id === 3 ? null : { id }, order_items: [{ item: { id: "MLA1", title: "Producto" }, quantity: 2 }],
       })) };
+    } else if (/^\/orders\/\d+$/.test(url.pathname)) {
+      if (detailFailure) return Response.json({ status: "paid" }, { status: 206 });
+      const id = Number(url.pathname.split("/").at(-1));
+      body = { id, status: id === 4 ? "cancelled" : "paid", seller: { id: 42 },
+        pack_id: id === 4 ? 999 : null,
+        cancel_detail: id === 4 ? { requested_by: "buyer", description: "Otro problema" } : null,
+        date_created: "2026-09-12T15:00:00Z", shipping: id === 3 ? null : { id },
+        order_items: [{ item: { id: "MLA1", title: "Producto" }, quantity: 2 }] };
     } else if (/^\/shipments\/\d+$/.test(url.pathname)) {
       const id = Number(url.pathname.split("/").at(-1));
       body = id === 4
-        ? { id, status: "delivered", mode: "me2", logistic_type: "self_service" }
+        ? { id, status: "shipped", substatus: "returning_to_sender", mode: "me2", logistic_type: "self_service" }
         : { id, status: "delivered", destination: { shipping_address: { state: { name: "Buenos Aires" }, municipality: { name: "La Matanza" }, city: { name: "Villa Luzuriaga" }, zip_code: "1753" } }, logistic: { mode: "me2", type: id === 1 ? "self_service" : "drop_off" }, lead_time: { estimated_delivery_time: { date: "2026-09-15T18:00:00Z" } } };
     } else if (/^\/shipments\/\d+\/history$/.test(url.pathname)) {
       body = [{ status: "shipped", date: url.pathname.includes("/2/") ? "2026-09-14T02:30:00Z" : "2026-09-15T02:30:00Z" }, { status: "delivered", date: "2026-09-15T18:00:00Z" }];
@@ -57,6 +66,12 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   assert.ok(calls.includes("/shipments/1/history"));
   assert.ok(calls.includes("/shipments/2/history"));
   assert.equal(data.orders[1].cancelled, true);
+  assert.equal(data.orders[1].orderStatus, "cancelled", "El detalle prevalece sobre el índice de búsqueda desactualizado");
+  assert.equal(data.orders[1].packId, "999");
+  assert.equal(data.orders[1].cancellationRequestedBy, "buyer");
+  assert.equal(data.orders[1].cancellationReason, "Otro problema");
+  assert.equal(data.orders[1].shippingStatus, "shipped", "La cancelación no inventa un estado logístico distinto");
+  assert.equal(data.orders[1].shippingSubstatus, "returning_to_sender");
   assert.deepEqual(data.unverified.map((o: { id: string }) => o.id), ["3"]);
   assert.ok(data.supplier);
   assert.equal(data.supplier.complete, false);
@@ -69,4 +84,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   assert.equal((await POST(request("2026-09-13", "2026-09-14"))).status, 400);
   assert.equal((await POST(request("invalid"))).status, 400);
   assert.equal((await POST(request("2999-01-01"))).status, 400);
+  detailFailure = true;
+  const incomplete = await POST(request("2026-09-14", "2026-09-13"));
+  assert.notEqual(incomplete.status, 200, "No mostrar como actual el estado viejo si falla el detalle");
 });

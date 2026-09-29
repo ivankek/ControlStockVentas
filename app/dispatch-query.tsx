@@ -21,6 +21,13 @@ const orderStatuses: Record<string, string> = {
   partially_paid: "Pago parcial", paid: "Pagado", partially_refunded: "Reembolso parcial",
   pending_cancel: "Cancelación pendiente", cancelled: "Cancelado", invalid: "No válido",
 };
+const shippingDetails: Record<string, string> = {
+  returning_to_sender: "En devolución al remitente", returned_to_hub: "Devuelto al centro logístico",
+  returned_to_agency: "Devuelto a la agencia", picked_up_for_return: "Retirado para devolución",
+  receiver_absent: "Destinatario ausente", waiting_for_withdrawal: "Esperando retiro",
+  not_localized: "Domicilio no localizado", destroyed: "Envío destruido",
+  damaged: "Envío dañado", to_review: "En revisión", closed_by_user: "Cerrado por el usuario",
+};
 function statusColor(status?: string) {
   if (["delivered", "paid"].includes(status ?? "")) return "success";
   if (["shipped", "confirmed", "active"].includes(status ?? "")) return "info";
@@ -82,15 +89,19 @@ export default function DispatchQuery({ token }: { token?: string }) {
     const mode = o.mode === "flex" ? "Flex" : o.mode === "correo" ? "Mercado Envíos · correo" : "Acordar con el comprador / personalizado";
     return <div className="pending-row" key={o.id}><div className="order-text">
       <div className="dispatch-heading"><strong>ID de orden: {o.id}</strong>
-        <span className={`dispatch-status ${statusColor(o.shippingStatus)}`}>Envío: {statuses[o.shippingStatus ?? ""] ?? (o.shippingStatus ? "Estado no reconocido" : "Sin seguimiento")}</span>
+        {o.cancelled && <span className="dispatch-status danger">Venta cancelada{o.cancellationRequestedBy === "buyer" ? " por el comprador" : o.cancellationRequestedBy === "seller" ? " por el vendedor" : ""}</span>}
+        <span className={`dispatch-status ${o.cancelled ? "neutral" : statusColor(o.shippingStatus)}`}>Envío: {statuses[o.shippingStatus ?? ""] ?? o.shippingStatus ?? "Sin seguimiento"}</span>
         <span className={`dispatch-status ${statusColor(o.orderStatus)}`}>Pedido: {orderStatuses[o.orderStatus ?? ""] ?? "Sin información"}</span>
       </div>
+      {o.packId && <small>Número de paquete: {o.packId}</small>}
+      {o.shippingSubstatus && <small>Detalle del envío: {shippingDetails[o.shippingSubstatus] ?? o.shippingSubstatus}</small>}
+      {o.cancellationReason && <small>Motivo de cancelación: {o.cancellationReason}</small>}
       <p>{o.lines.map((l) => `${result?.products.find((p) => p.id === l.productId)?.name ?? l.productId} × ${l.quantity}`).join(" · ")}</p>
       <p className="dispatch-customer">Comprador: <strong>{o.buyerName || "No informado"}</strong></p>
       {!o.buyerName && o.receiverName && <small>Destinatario: {o.receiverName}</small>}
       <small>Provincia: {o.province || "No informada"} · Localidad: {o.city || "No informada"}</small>
       <small>{mode}</small>
-      {o.cancelled && <small>Venta cancelada.</small>}
+      {o.cancelled && o.shippingStatus && o.shippingStatus !== "cancelled" && <small>La venta está cancelada. El seguimiento del envío aún informa «{statuses[o.shippingStatus] ?? o.shippingStatus}».</small>}
       {o.dispatchedDate && <small>Despacho registrado: {o.dispatchedDate.split("-").reverse().join("/")} · {o.evidence === "Confirmado manualmente" ? "Confirmación manual" : "Mercado Libre"}</small>}
       {o.mode === "flex" && <small>Zona Flex: {result?.flex?.[o.id]?.zone ? FLEX_LABELS[result.flex[o.id].zone!] : "Desconocida"} · {result?.flex?.[o.id]?.cents === undefined ? "Costo pendiente" : money(result.flex[o.id].cents!)} · {result?.flex?.[o.id]?.reason}</small>}
       {(o.mode === "acordar" || o.mode === "flex") && <OrderNoteEditor key={`${o.id}-${result?.notes?.[o.id]?.updatedAt}`} order={o} note={result?.notes?.[o.id]} token={token} onSaved={() => void consult()} />}
@@ -116,6 +127,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
     {busy && <p role="status">Consultando ventas e historial de envíos. Puede tardar unos minutos.</p>}
     {result && <>
       <p className="table-note">Se muestran los despachos registrados entre {result.from.split("-").reverse().join("/")} y {result.date.split("-").reverse().join("/")}.</p>
+      <p className="table-note">Estados consultados: {new Date(result.queriedAt).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}. <button disabled={busy} onClick={() => void consult()}>Actualizar estados</button></p>
       <details className="dispatch-coverage"><summary>Cómo se buscan los despachos y qué puede quedar fuera</summary><p>{result.warning}</p><p>Por ejemplo: una compra del viernes despachada el lunes debe aparecer al consultar el lunes. La búsqueda de órdenes usa la fecha de compra y luego comprobamos la fecha del envío.</p></details>
       {!!result.orders.length && <section className="panel dispatch-copy"><div className="panel-title"><h2>Resumen para el proveedor</h2><button className="primary" onClick={() => void copy()}>Copiar resumen</button></div>
         {result.days?.map((day) => <div className="dispatch-day" key={day.date}><div className="dispatch-heading"><h3>{dispatchMessage([day]).split("\n")[0]}</h3><button onClick={() => setModalDay(day.date)}>Ver envíos ({result.orders.filter((o) => o.dispatchedDate === day.date).length})</button></div><pre>{dispatchMessage([day]).split("\n").slice(1).join("\n")}</pre></div>)}
