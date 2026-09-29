@@ -1,9 +1,9 @@
 "use client";
-import { useAccountPath } from "./inventory-context";
+import { useAccountPath, useInventory } from "./inventory-context";
 import { useEffect, useRef, useState } from "react";
 import { today, money } from "@/lib/domain";
 import type { Order } from "@/lib/domain";
-import { dispatchMessage, type DispatchQueryResult } from "@/lib/dispatch-query";
+import { dispatchMessage, filterDispatchOrders, type DispatchFilters, type DispatchQueryResult } from "@/lib/dispatch-query";
 import { FLEX_LABELS } from "@/lib/flex-zones";
 import OrderNoteEditor from "./order-note";
 
@@ -29,6 +29,7 @@ function statusColor(status?: string) {
 }
 export default function DispatchQuery({ token }: { token?: string }) {
   const accountPath = useAccountPath();
+  const { account } = useInventory();
   const [date, setDate] = useState(today);
   const [from, setFrom] = useState(today);
   const [period, setPeriod] = useState(false);
@@ -36,20 +37,29 @@ export default function DispatchQuery({ token }: { token?: string }) {
   const [result, setResult] = useState<DispatchQueryResult>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const emptyFilters: DispatchFilters = { from: "", to: "", shipping: "", order: "", reviewOnly: false, sort: "desc" };
+  const [filters, setFilters] = useState<DispatchFilters>(emptyFilters);
+  const [modalDay, setModalDay] = useState<string>();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const detailSection = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (modalDay && result && dialog.current && !dialog.current.open) dialog.current.showModal();
+  }, [modalDay, result]);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     controller.current?.abort();
     setResult(undefined);
     setBusy(false);
-  }, [token]);
+    setModalDay(undefined); setFilters(emptyFilters);
+  }, [token, account]);
 
   async function consult() {
     if (!token) { setError("Iniciá sesión y conectá Mercado Libre para consultar."); return; }
     controller.current?.abort();
     const request = new AbortController();
     controller.current = request;
-    setBusy(true); setError(""); setCopyStatus(""); setResult(undefined);
+    setBusy(true); setError(""); setCopyStatus(""); setResult(undefined); setModalDay(undefined); setFilters(emptyFilters);
     try {
       const response = await fetch(accountPath("/api/sync"), {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -85,10 +95,12 @@ export default function DispatchQuery({ token }: { token?: string }) {
       {o.mode === "flex" && <small>Zona Flex: {result?.flex?.[o.id]?.zone ? FLEX_LABELS[result.flex[o.id].zone!] : "Desconocida"} · {result?.flex?.[o.id]?.cents === undefined ? "Costo pendiente" : money(result.flex[o.id].cents!)} · {result?.flex?.[o.id]?.reason}</small>}
       {(o.mode === "acordar" || o.mode === "flex") && <OrderNoteEditor key={`${o.id}-${result?.notes?.[o.id]?.updatedAt}`} order={o} note={result?.notes?.[o.id]} token={token} onSaved={() => void consult()} />}
       {o.review && <small>{o.review}</small>}
-      {cost && <p><strong>{cost.missing.length || cost.review ? "Costo parcial / a revisar" : "Costo del proveedor"}: {money(cost.totalCents)}</strong></p>}
-      {cost?.missing.map((text) => <small key={text}>{text}</small>)}
+      {cost && <p><strong>{cost.missing.length && !cost.totalCents ? "Costo del proveedor pendiente" : `${cost.missing.length || cost.review ? "Costo parcial / a revisar" : "Costo del proveedor"}: ${money(cost.totalCents)}`}</strong></p>}
+      {!!cost?.missing.length && <div className="dispatch-issues"><strong>Falta completar:</strong><ul>{cost.missing.map((text) => <li key={text}>{text}</li>)}</ul></div>}
     </div></div>;
   }
+  const visibleOrders = result ? filterDispatchOrders(result, filters) : [];
+  const reviewCount = result?.supplier?.orders.filter((o) => o.missing.length || o.review).length ?? 0;
   return <>
     <div className="toolbar"><label>Consultar<select value={period ? "range" : "day"} disabled={busy} onChange={(e) => { setPeriod(e.target.value === "range"); setResult(undefined); setCopyStatus(""); }}><option value="day">Un día</option><option value="range">Rango de fechas</option></select></label>
     {period && <label>Desde<input type="date" max={date} value={from} disabled={busy} onChange={(e) => { setFrom(e.target.value); setResult(undefined); setCopyStatus(""); }} /></label>}
@@ -103,23 +115,35 @@ export default function DispatchQuery({ token }: { token?: string }) {
     {!result && !busy && !error && <div className="empty">Elegí un día o un rango de fechas y consultá los despachos registrados en Mercado Libre.</div>}
     {busy && <p role="status">Consultando ventas e historial de envíos. Puede tardar unos minutos.</p>}
     {result && <>
-      <p className="warning">{result.warning}</p>
+      <p className="table-note">Se muestran los despachos registrados entre {result.from.split("-").reverse().join("/")} y {result.date.split("-").reverse().join("/")}.</p>
+      <details className="dispatch-coverage"><summary>Cómo se buscan los despachos y qué puede quedar fuera</summary><p>{result.warning}</p><p>Por ejemplo: una compra del viernes despachada el lunes debe aparecer al consultar el lunes. La búsqueda de órdenes usa la fecha de compra y luego comprobamos la fecha del envío.</p></details>
       {!!result.orders.length && <section className="panel dispatch-copy"><div className="panel-title"><h2>Resumen para el proveedor</h2><button className="primary" onClick={() => void copy()}>Copiar resumen</button></div>
-        <pre>{dispatchMessage(result.days ?? [])}</pre>{copyStatus && <p role="status">{copyStatus}</p>}
+        {result.days?.map((day) => <div className="dispatch-day" key={day.date}><div className="dispatch-heading"><h3>{dispatchMessage([day]).split("\n")[0]}</h3><button onClick={() => setModalDay(day.date)}>Ver envíos ({result.orders.filter((o) => o.dispatchedDate === day.date).length})</button></div><pre>{dispatchMessage([day]).split("\n").slice(1).join("\n")}</pre></div>)}
+        <p className="table-note"><strong>{result.supplier?.complete ? "Total" : "Subtotal parcial"}: {money(result.supplier?.totalCents ?? 0)}</strong></p>{copyStatus && <p role="status">{copyStatus}</p>}
       </section>}
       {result.supplier && <section className="panel pending"><div className="panel-title"><h2>{result.supplier.complete ? "Total del período al proveedor" : "Subtotal calculable · pendiente de revisión"}</h2><strong>{money(result.supplier.totalCents)}</strong></div>
         <div className="table-wrap"><table><thead><tr><th>FECHA</th><th>PRODUCTO DEL PROVEEDOR</th><th>UNIDADES</th><th>COSTO UNITARIO</th><th>IMPORTE</th></tr></thead><tbody>{result.days?.flatMap((day) => day.supplier.rows.map((r) => <tr key={`${day.date}:${r.id}`}><td>{day.date.split("-").reverse().join("/")}</td><td>{r.name}</td><td>{r.units}</td><td>{money(r.unitCents)}</td><td>{money(r.totalCents)}</td></tr>))}</tbody></table></div>
-        {!result.supplier.complete && <p className="warning">Faltan asociaciones o costos, o hay pedidos con incidencias. Revisá el detalle antes de pagar.</p>}
+        {!result.supplier.complete && <div className="warning">{reviewCount} pedidos necesitan revisión. Cada pedido indica el producto sin asociación, el costo faltante o la incidencia.<button onClick={() => { setFilters({ ...emptyFilters, reviewOnly: true }); detailSection.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Ver pedidos para revisar</button></div>}
         <p className="table-note">Costo vigente en cada fecha de despacho. No registra pagos ni descuenta pagos anteriores. Solo incluye despachos del período; los pedidos sin fecha verificable quedan fuera.</p>
       </section>}
-      <section className="panel"><div className="panel-title"><h2>Despachos {result.from !== result.date ? `del ${result.from} al ${result.date}` : `del ${result.date}`}</h2><span className="pill">{result.orders.length} pedidos</span></div>
-        {result.orders.map(row)}
-        {!result.orders.length && <div className="empty">No se encontraron despachos registrados para ese período dentro del período consultado.</div>}
+      <section className="panel" ref={detailSection}><div className="panel-title"><h2>Despachos {result.from !== result.date ? `del ${result.from} al ${result.date}` : `del ${result.date}`}</h2><span className="pill">{visibleOrders.length} de {result.orders.length} pedidos</span></div>
+        <div className="toolbar dispatch-filters">
+          <label>Despachado desde<input type="date" min={result.from} max={result.date} value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></label>
+          <label>Hasta<input type="date" min={filters.from || result.from} max={result.date} value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></label>
+          <label>Estado del envío<select value={filters.shipping} onChange={(e) => setFilters({ ...filters, shipping: e.target.value })}><option value="">Todos</option>{[...new Set(result.orders.map((o) => o.shippingStatus ?? "unknown"))].sort().map((s) => <option key={s} value={s}>{statuses[s] ?? (s === "unknown" ? "Sin seguimiento" : s)}</option>)}</select></label>
+          <label>Estado del pedido<select value={filters.order} onChange={(e) => setFilters({ ...filters, order: e.target.value })}><option value="">Todos</option>{[...new Set(result.orders.map((o) => o.orderStatus ?? "unknown"))].sort().map((s) => <option key={s} value={s}>{orderStatuses[s] ?? (s === "unknown" ? "Sin información" : s)}</option>)}</select></label>
+          <label>Ordenar<select value={filters.sort} onChange={(e) => setFilters({ ...filters, sort: e.target.value })}><option value="desc">Más recientes primero</option><option value="asc">Más antiguos primero</option><option value="status">Estado del envío</option><option value="review">Para revisar primero</option></select></label>
+          <label><input type="checkbox" checked={filters.reviewOnly} onChange={(e) => setFilters({ ...filters, reviewOnly: e.target.checked })} />Solo para revisar</label><button onClick={() => setFilters(emptyFilters)}>Limpiar filtros</button>
+        </div>
+        <p className="table-note">Los filtros se aplican a este detalle. El resumen y el total de arriba corresponden al período consultado completo.</p>
+        {visibleOrders.map(row)}
+        {!visibleOrders.length && <div className="empty">{result.orders.length ? "No hay pedidos que coincidan con estos filtros." : "No se encontraron despachos registrados para ese período dentro de la cobertura consultada."}</div>}
       </section>
       <details className="panel pending"><summary>Sin fecha de despacho verificable ({result.unverified.length})</summary>
         <p className="table-note">Estos pedidos no se cuentan como despachados en el período elegido. En los envíos acordados podés registrar el despacho y su fecha.</p>
         {result.unverified.map(row)}
       </details>
+      {modalDay && <dialog ref={dialog} className="dispatch-dialog" aria-labelledby="dispatch-dialog-title" onCancel={() => setModalDay(undefined)} onClose={() => setModalDay(undefined)} onClick={(e) => { if (e.target === e.currentTarget) { dialog.current?.close(); setModalDay(undefined); } }}><div className="dispatch-dialog-content"><div className="panel-title"><h2 id="dispatch-dialog-title">Envíos del {modalDay.split("-").reverse().join("/")}</h2><button autoFocus onClick={() => { dialog.current?.close(); setModalDay(undefined); }}>Cerrar ×</button></div>{result.orders.filter((o) => o.dispatchedDate === modalDay).map(row)}</div></dialog>}
     </>}
   </>;
 }

@@ -64,7 +64,8 @@ export function supplierReport(state: State, orders: Order[], date: string) {
       const product = state.supplierProducts?.find((p) => p.id === link?.supplierId);
       const cost = costAt(product, date);
       if (!link || !product || cost === undefined) {
-        missing.push(`${line.productId}: ${!link || !product ? "sin producto del proveedor asociado" : "sin costo vigente en esta fecha"}`); continue;
+        const name = state.products.find((p) => p.id === line.productId)?.name ?? item?.title ?? line.productId;
+        missing.push(`${name} (${line.productId}): ${!link || !product ? "sin producto del proveedor asociado" : `sin costo vigente al ${date} para ${product.name}`}`); continue;
       }
       const units = line.quantity * link.units;
       const subtotal = units * cost;
@@ -73,7 +74,8 @@ export function supplierReport(state: State, orders: Order[], date: string) {
       const row = rows.get(product.id) ?? { id: product.id, name: product.name, units: 0, unitCents: cost, totalCents: 0 };
       row.units += units; row.totalCents += subtotal; rows.set(product.id, row);
     }
-    return { orderId: order.id, totalCents, missing, review: !!order.cancelled || !!order.review };
+    const reviewReasons = [...(order.cancelled ? ["Venta cancelada: revisar el pago al proveedor."] : []), ...(order.review ? [order.review] : [])];
+    return { orderId: order.id, totalCents, missing, review: !!order.cancelled || !!order.review, reviewReasons };
   });
   const totalCents = details.reduce((sum, d) => sum + d.totalCents, 0);
   if (!Number.isSafeInteger(totalCents)) throw Error("El total supera el límite permitido.");
