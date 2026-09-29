@@ -90,6 +90,16 @@ export function costAt(p: Product | undefined, date: string) {
     .filter((c) => c.from <= date)
     .sort((a, b) => b.from.localeCompare(a.from))[0]?.cents;
 }
+// Repeated saves at the same amount do not start a new price period.
+export function pricePeriodAt(p: { costs: { from: string; cents: number }[] } | undefined, date: string) {
+  const costs = p?.costs.filter((cost) => cost.from <= date).sort((a, b) => b.from.localeCompare(a.from)) ?? [];
+  let price = costs[0];
+  for (const cost of costs.slice(1)) {
+    if (cost.cents !== price.cents) break;
+    price = cost;
+  }
+  return price;
+}
 export function summary(state: State, date: string) {
   const paid = new Set(state.settlements.flatMap((s) => s.orderIds));
   const orders = state.orders.filter(

@@ -2,9 +2,10 @@ import { access, get, type RawOrder } from "./meli";
 import { shipmentDestination, normalizeShipment, type Shipment } from "./shipping";
 import type { Sale } from "./profit";
 import { createGeorefResolver } from "./georef";
+import { paymentBase } from "./flex-credits";
 export const amountCents = (value: unknown): number | undefined => typeof value === "number" && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100)) ? Math.round(value * 100) : undefined;
 
-async function paymentNet(id: number, seller: number, token: string): Promise<number | undefined> {
+async function paymentNet(id: number, seller: number, token: string): Promise<{ net: number; base?: number } | undefined> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const response = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(15000) });
     if ([401, 403, 404].includes(response.status)) return undefined;
@@ -12,7 +13,8 @@ async function paymentNet(id: number, seller: number, token: string): Promise<nu
     if (!response.ok) return undefined;
     const data = await response.json();
     if (String(data.id) !== String(id) || data.collector_id !== seller || data.currency_id !== "ARS" || data.status !== "approved" || data.transaction_amount_refunded > 0) return undefined;
-    return amountCents(data.transaction_details?.net_received_amount);
+    const net = amountCents(data.transaction_details?.net_received_amount);
+    return net === undefined ? undefined : { net, base: paymentBase(data) };
   }
 }
 export async function salesPage(user: string, from: string, to: string, offset: number, accountId?: string) {
@@ -23,7 +25,7 @@ export async function salesPage(user: string, from: string, to: string, offset: 
   const sales: Sale[] = [];
   const resolveGeoref = createGeorefResolver();
   const shipments = new Map<string, Promise<Shipment>>();
-  const payments = new Map<number, Promise<number | undefined>>();
+  const payments = new Map<number, ReturnType<typeof paymentNet>>();
   // Small batches avoid saturating either service. Results stay in memory only.
   for (let i = 0; i < page.results.length; i += 4) {
     const batch = await Promise.all(page.results.slice(i, i + 4).map(async (raw): Promise<Sale> => {
@@ -47,7 +49,10 @@ export async function salesPage(user: string, from: string, to: string, offset: 
         if (!payments.has(id)) payments.set(id, paymentNet(id, tokens.user_id, tokens.access_token));
         return payments.get(id)!;
       }));
-      if (nets.length && nets.every((value) => value !== undefined)) sale.receivedCents = nets.reduce<number>((sum, value) => sum + value!, 0);
+      if (nets.length && nets.every((value) => value !== undefined)) {
+        sale.receivedCents = nets.reduce<number>((sum, value) => sum + value!.net, 0);
+        if (nets.every((value) => value?.base !== undefined)) sale.paymentBaseCents = nets.reduce<number>((sum, value) => sum + value!.base!, 0);
+      }
       return sale;
     }));
     sales.push(...batch);

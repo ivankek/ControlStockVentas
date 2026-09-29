@@ -1,5 +1,6 @@
 "use client";
 import Stock from "./stock";
+import { ViewStateProvider } from "./view-state";
 import StockSync from "./stock-sync";
 import Users from "./users";
 import { InventoryContext } from "./inventory-context";
@@ -50,6 +51,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
   const [message, setMessage] = useState("");
   const [demo, setDemo] = useState(!configured);
   const [token, setToken] = useState<string>();
+  const [sessionUser, setSessionUser] = useState("");
   const [inventory, setInventory] = useState<InventorySnapshot>();
   const [account, setAccount] = useState("");
   const [connected, setConnected] = useState(false);
@@ -62,6 +64,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
   const [costDate, setCostDate] = useState(today);
   const [cost, setCost] = useState("");
   const liveToken = useRef<string | undefined>(undefined);
+  const liveUser = useRef<string | undefined>(undefined);
   const supabase = useMemo(
     () =>
       configured
@@ -124,7 +127,10 @@ export default function Dashboard({ configured }: { configured: boolean }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (liveUser.current !== session?.user.id) { setInventory(undefined); setAccount(""); }
+      liveUser.current = session?.user.id;
       liveToken.current = session?.access_token;
+      setSessionUser(session?.user.id ?? "");
       setToken(session?.access_token);
       if (session) {
         setDemo(false);
@@ -281,6 +287,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
   const ownAccounts = inventory?.accounts.filter((a) => a.owner_id === inventory.profile.id) ?? [];
   return (
     <InventoryContext.Provider value={{ data: inventory, account, setAccount, command: inventoryCommand }}>
+    <ViewStateProvider key={sessionUser + ":" + (inventory?.profile.role ?? "")}>
     <div className="shell">
       <aside>
         <div className="brand">
@@ -366,7 +373,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                   : tab === "Usuarios"
                     ? "Roles y relaciones entre proveedores y vendedores."
                   : tab === "Gastos del negocio"
-                    ? "Envíos, monotributo y cargos mensuales adicionales."
+                    ? "Tarifas de envío y pagos al transportista Flex."
                   : tab === "Ganancias"
                     ? "Tus ventas y el resultado del negocio, por período."
                     : tab === "Liquidaciones"
@@ -407,7 +414,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
           {tab === "Stock" && <Stock />}
           {tab === "Usuarios" && <Users />}
           {tab === "Publicaciones" && <Listings key={account} token={account ? token : undefined} />}
-          {tab === "Gastos del negocio" && <BusinessCosts token={token} />}
+          {tab === "Gastos del negocio" && <BusinessCosts key={account} token={token} />}
           {tab === "Ganancias" && <Profits key={account} token={account ? token : undefined} />}
           {tab === "Despachos" && !demo && <DispatchQuery key={account} token={account ? token : undefined} />}
           {tab === "Despachos" && demo && (
@@ -1046,6 +1053,6 @@ export default function Dashboard({ configured }: { configured: boolean }) {
         )}
       </dialog>
     </div>
-    </InventoryContext.Provider>
+    </ViewStateProvider></InventoryContext.Provider>
   );
 }

@@ -56,12 +56,14 @@ export function supplierReport(state: State, orders: Order[], date: string) {
   const rows = new Map<string, { id: string; name: string; units: number; unitCents: number; totalCents: number }>();
   const details = orders.map((order) => {
     const missing: string[] = [];
+    const products: string[] = [];
     let totalCents = 0;
     for (const line of order.lines) {
       const [itemId, variant = "0"] = line.productId.split(":");
       const item = state.listings?.find((p) => p.id === itemId);
       const link = state.supplierLinks?.[line.productId] ?? (variant === "0" && item ? state.supplierLinks?.[listingKey(item)] : undefined);
       const product = state.supplierProducts?.find((p) => p.id === link?.supplierId);
+      products.push(`${product?.name ?? state.products.find((p) => p.id === line.productId)?.name ?? item?.title ?? line.productId} × ${line.quantity * (link?.units ?? 1)}`);
       const cost = costAt(product, date);
       if (!link || !product || cost === undefined) {
         const name = state.products.find((p) => p.id === line.productId)?.name ?? item?.title ?? line.productId;
@@ -74,8 +76,8 @@ export function supplierReport(state: State, orders: Order[], date: string) {
       const row = rows.get(product.id) ?? { id: product.id, name: product.name, units: 0, unitCents: cost, totalCents: 0 };
       row.units += units; row.totalCents += subtotal; rows.set(product.id, row);
     }
-    const reviewReasons = [...(order.cancelled ? ["Venta cancelada: revisar el pago al proveedor."] : []), ...(order.review ? [order.review] : [])];
-    return { orderId: order.id, totalCents, missing, review: !!order.cancelled || !!order.review, reviewReasons };
+    const reviewReasons = [...(order.cancelled ? ["Venta cancelada"] : []), ...(order.review ? [order.review] : [])];
+    return { orderId: order.id, products, totalCents, missing, review: !!order.cancelled || !!order.review, reviewReasons };
   });
   const totalCents = details.reduce((sum, d) => sum + d.totalCents, 0);
   if (!Number.isSafeInteger(totalCents)) throw Error("El total supera el límite permitido.");

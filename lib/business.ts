@@ -15,7 +15,6 @@ export const businessCommand = z.discriminatedUnion("type", [
   z.object({ type: z.literal("note"), id: z.string().regex(/^\d+$/), flexZone: z.enum([...FLEX_ZONES, "NONE"]).nullable().optional(), dispatchedDate: z.iso.date().nullable().optional(), shippingCents: cents.nullable().optional(), netCents: cents.nullable().optional() }),
   z.object({ type: z.literal("flexRate"), zone: z.enum(FLEX_ZONES), from: z.iso.date(), cents }),
   z.object({ type: z.literal("zone"), id: z.string().uuid(), name: z.string().trim().min(1).max(100), province: z.string().trim().min(1).max(100), cities: z.array(z.string().trim().min(1).max(100)).min(1).max(200), from: z.iso.date(), cents }),
-  z.object({ type: z.literal("month"), month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), taxCents: cents, billingCents: cents }),
 ]);
 export function updateBusiness(state: State, action: z.infer<typeof businessCommand>, order?: Order): State {
   const next = structuredClone(state);
@@ -42,7 +41,7 @@ export function updateBusiness(state: State, action: z.infer<typeof businessComm
     const old = business.zones.find((zone) => zone.id === action.id);
     const zone = { id: action.id, name: action.name, province: action.province, cities: [...new Set(action.cities)], rates: [...(old?.rates ?? []).filter((rate) => rate.from !== action.from), { from: action.from, cents: action.cents }].sort((a, b) => a.from.localeCompare(b.from)) };
     business.zones = [...business.zones.filter((entry) => entry.id !== action.id), zone];
-  } else business.months[action.month] = { taxCents: action.taxCents, billingCents: action.billingCents };
+  }
   return next;
 }
 export function manualDispatches(orders: Order[], business?: Business) {

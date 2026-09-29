@@ -1,4 +1,5 @@
 "use client";
+import { useViewState } from "./view-state";
 import { useEffect, useState } from "react";
 import { canManageSupplier, type StockMapping, type StockVariant } from "@/lib/inventory";
 import { costAt, money, today } from "@/lib/domain";
@@ -7,9 +8,9 @@ import { useInventory } from "./inventory-context";
 
 export default function Stock() {
   const { data, command } = useInventory();
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useViewState("app/stock.tsx:filter", "");
   const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useViewState<string | null>("app/stock.tsx:expanded", null);
   const [editing, setEditing] = useState<StockVariant | "new" | null>(null);
   async function refresh() { setBusy(true); setMessage(""); try { await command(); setMessage("Stock actualizado."); } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); } }
   async function save(v: StockVariant, physical: number) {

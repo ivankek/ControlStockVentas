@@ -68,7 +68,12 @@ test("gastos mensuales prorrateados reconcilian centavos entre meses y año bisi
   for (let day = 1; day <= 29; day++) { const date = `2024-02-${String(day).padStart(2, "0")}`; sum += monthlyExpenses(b, date, date).total; }
   assert.equal(sum, 12001);
   assert.equal(monthlyExpenses(b, "2024-02-01", "2024-03-31").total, 15101);
-  assert.deepEqual(reportTotals([], b, "2024-01-31", "2024-02-01").missingMonths, ["2024-01"]);
+  assert.deepEqual(reportTotals([], b, "2024-01-31", "2024-02-01").missingMonths, []);
+  b.months["2026-09"] = { taxCents: 1000000, billingCents: 3000000 };
+  const totals = reportTotals(profitRows(state(), [sale()]), b, "2026-09-01", "2026-09-30");
+  assert.equal(totals.net, 4000);
+  assert.equal(totals.expenses.total, 0);
+  assert.equal(businessCommand.safeParse({ type: "month", month: "2026-09", taxCents: 1, billingCents: 2 }).success, false);
   const parts = expenseBreakdown(b, "2024-02-28", "2024-03-03");
   assert.deepEqual(parts.map((part) => [part.days, part.daysInMonth]), [[2, 29], [3, 31]]);
   assert.equal(parts.reduce((sum, part) => sum + part.total, 0), monthlyExpenses(b, "2024-02-28", "2024-03-03").total);

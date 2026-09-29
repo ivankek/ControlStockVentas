@@ -1,4 +1,5 @@
 "use client";
+import { useViewState } from "./view-state";
 import { useEffect, useRef, useState } from "react";
 import type { Listing } from "@/lib/listings";
 import type { Product, State } from "@/lib/domain";
@@ -20,16 +21,16 @@ const statuses: Record<string, string> = { active: "Activa", paused: "Pausada", 
 export default function Listings({ token }: { token?: string }) {
   const path = useAccountPath();
   const { account, data: inventory } = useInventory();
-  const [items, setItems] = useState<Listing[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [links, setLinks] = useState<NonNullable<State["supplierLinks"]>>({});
+  const [items, setItems] = useViewState<Listing[]>("app/listings.tsx:items", []);
+  const [products, setProducts] = useViewState<Product[]>("app/listings.tsx:products", []);
+  const [links, setLinks] = useViewState<NonNullable<State["supplierLinks"]>>("app/listings.tsx:links", {});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [filter, setFilter] = useState("");
-  const [association, setAssociation] = useState<AssociationFilter>("all");
-  const [sort, setSort] = useState<ListingSort>("original");
+  const [filter, setFilter] = useViewState("app/listings.tsx:filter", "");
+  const [association, setAssociation] = useViewState<AssociationFilter>("app/listings.tsx:association", "all");
+  const [sort, setSort] = useViewState<ListingSort>("app/listings.tsx:sort", "original");
   const active = useRef<AbortController | null>(null);
-  useEffect(() => { setItems([]); setMessage(""); if (token) void request(false); return () => active.current?.abort(); }, [token, account]);
+  useEffect(() => { setMessage(""); if (token) void request(false); return () => active.current?.abort(); }, [token, account]);
   async function request(update: boolean) {
     if (!token) return;
     active.current?.abort();

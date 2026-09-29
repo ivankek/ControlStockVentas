@@ -1,4 +1,5 @@
 "use client";
+import { useViewState } from "./view-state";
 import { useEffect, useRef, useState } from "react";
 import { money, today } from "@/lib/domain";
 import { carrierPeriod, type carrierReport } from "@/lib/flex-carrier";
@@ -9,13 +10,13 @@ type Result = { from: string; date: string; warning: string; carrier: ReturnType
 export default function FlexCarrier({ token }: { token?: string }) {
   const accountPath = useAccountPath();
   const { account } = useInventory();
-  const [period, setPeriod] = useState("month");
-  const [date, setDate] = useState(today);
-  const [result, setResult] = useState<Result>();
+  const [period, setPeriod] = useViewState("app/flex-carrier.tsx:period", "month");
+  const [date, setDate] = useViewState("app/flex-carrier.tsx:date", today);
+  const [result, setResult] = useViewState<Result>("app/flex-carrier.tsx:result");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const controller = useRef<AbortController | null>(null);
-  useEffect(() => { controller.current?.abort(); setResult(undefined); setBusy(false); return () => controller.current?.abort(); }, [token, account]);
+  useEffect(() => { controller.current?.abort(); setBusy(false); return () => controller.current?.abort(); }, [token, account]);
   async function consult() {
     if (!token || !date) return;
     controller.current?.abort(); const request = new AbortController(); controller.current = request;

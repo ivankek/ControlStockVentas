@@ -37,7 +37,7 @@ export function dispatchMessage(days: DispatchDay[]) {
   const parts = ordered.map(({ date, supplier }) => {
     const weekday = new Intl.DateTimeFormat("es-AR", { weekday: "long", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
     const heading = `${weekday[0].toUpperCase()}${weekday.slice(1)} ${date.slice(8)}/${date.slice(5, 7)}:`;
-    const issues = supplier.orders.filter((o) => o.missing.length || o.review).map((o) => `Pendiente de revisión · Orden ${o.orderId}: ${[...o.missing, ...(o.reviewReasons ?? (o.review ? ["Revisar incidencia del pedido."] : []))].join("; ")}`);
+    const issues = supplier.orders.filter((o) => o.missing.length || o.review).map((o) => `Pendiente de revisión · Orden ${o.orderId} · ${o.products.join(" · ")}: ${[...o.missing, ...o.reviewReasons].join("; ")}`);
     return [heading, ...supplier.rows.map((r) => `${r.name} x ${r.units}u = ${amount(r.totalCents)}`), ...issues].join("\n");
   });
   const complete = ordered.every((d) => d.supplier.complete);

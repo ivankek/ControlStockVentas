@@ -24,6 +24,7 @@ test('el resumen advierte importes incompletos e incidencias', () => {
   assert.match(text, /Orden 1/);
   assert.match(text, /MLA1:0/);
   assert.match(text, /Venta cancelada/);
+  assert.doesNotMatch(text, /pago al proveedor|pagar al proveedor/);
 });
 
 test('detalle filtrable por despacho y estados, con motivos concretos y totales intactos', () => {

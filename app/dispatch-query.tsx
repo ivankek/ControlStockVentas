@@ -1,4 +1,5 @@
 "use client";
+import { useViewState } from "./view-state";
 import { useAccountPath, useInventory } from "./inventory-context";
 import { useEffect, useRef, useState } from "react";
 import { today, money } from "@/lib/domain";
@@ -30,15 +31,15 @@ function statusColor(status?: string) {
 export default function DispatchQuery({ token }: { token?: string }) {
   const accountPath = useAccountPath();
   const { account } = useInventory();
-  const [date, setDate] = useState(today);
-  const [from, setFrom] = useState(today);
-  const [period, setPeriod] = useState(false);
+  const [date, setDate] = useViewState("app/dispatch-query.tsx:date", today);
+  const [from, setFrom] = useViewState("app/dispatch-query.tsx:from", today);
+  const [period, setPeriod] = useViewState("app/dispatch-query.tsx:period", false);
   const [copyStatus, setCopyStatus] = useState("");
-  const [result, setResult] = useState<DispatchQueryResult>();
+  const [result, setResult] = useViewState<DispatchQueryResult>("app/dispatch-query.tsx:result");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const emptyFilters: DispatchFilters = { from: "", to: "", shipping: "", order: "", reviewOnly: false, sort: "desc" };
-  const [filters, setFilters] = useState<DispatchFilters>(emptyFilters);
+  const [filters, setFilters] = useViewState<DispatchFilters>("app/dispatch-query.tsx:filters", emptyFilters);
   const [modalDay, setModalDay] = useState<string>();
   const dialog = useRef<HTMLDialogElement>(null);
   const detailSection = useRef<HTMLElement>(null);
@@ -49,9 +50,8 @@ export default function DispatchQuery({ token }: { token?: string }) {
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     controller.current?.abort();
-    setResult(undefined);
     setBusy(false);
-    setModalDay(undefined); setFilters(emptyFilters);
+    setModalDay(undefined);
   }, [token, account]);
 
   async function consult() {
@@ -90,7 +90,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
       {!o.buyerName && o.receiverName && <small>Destinatario: {o.receiverName}</small>}
       <small>Provincia: {o.province || "No informada"} · Localidad: {o.city || "No informada"}</small>
       <small>{mode}</small>
-      {o.cancelled && <small>Venta cancelada: revisar antes de pagar al proveedor.</small>}
+      {o.cancelled && <small>Venta cancelada.</small>}
       {o.dispatchedDate && <small>Despacho registrado: {o.dispatchedDate.split("-").reverse().join("/")} · {o.evidence === "Confirmado manualmente" ? "Confirmación manual" : "Mercado Libre"}</small>}
       {o.mode === "flex" && <small>Zona Flex: {result?.flex?.[o.id]?.zone ? FLEX_LABELS[result.flex[o.id].zone!] : "Desconocida"} · {result?.flex?.[o.id]?.cents === undefined ? "Costo pendiente" : money(result.flex[o.id].cents!)} · {result?.flex?.[o.id]?.reason}</small>}
       {(o.mode === "acordar" || o.mode === "flex") && <OrderNoteEditor key={`${o.id}-${result?.notes?.[o.id]?.updatedAt}`} order={o} note={result?.notes?.[o.id]} token={token} onSaved={() => void consult()} />}

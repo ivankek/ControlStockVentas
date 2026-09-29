@@ -45,6 +45,8 @@ export function matanzaZoneFromCoordinates(latitude: number, longitude: number) 
   }, undefined as { zone: "CORDON_1" | "CORDON_2"; locality: string; distance: number } | undefined);
 }
 export const FLEX_LOCALITIES: Record<string, string[]> = {
+  // https://www.sanisidro.gob.ar/localidades
+  "San Isidro": ["Beccar", "Béccar", "Boulogne", "Boulogne Sur Mer", "Martínez", "Acassuso"],
   "Avellaneda": ["Sarandí", "Wilde", "Villa Domínico", "Dock Sud", "Piñeyro", "Crucecita"],
   "Pilar": ["Presidente Derqui", "Villa Rosa"],
   "Quilmes": ["Bernal", "Bernal Oeste", "Bernal Este", "Ezpeleta", "Don Bosco"],

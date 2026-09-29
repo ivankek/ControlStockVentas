@@ -1,12 +1,14 @@
 "use client";
+import { useViewState } from "./view-state";
 import { useAccountPath } from "./inventory-context";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { emptyState, money, today, type State } from "@/lib/domain";
 import { emptyBusiness } from "@/lib/business";
-import { profitRows, reportTotals, expenseBreakdown, type Sale } from "@/lib/profit";
+import { profitRows, reportTotals, type Sale } from "@/lib/profit";
 import { queryProfitSales } from "@/lib/profit-query";
 import { FLEX_LABELS } from "@/lib/flex-zones";
 import OrderNoteEditor from "./order-note";
+import type { FlexCredit } from "@/lib/flex-credits";
 
 const shift = (date: string, days: number) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 function period(mode: string, selected: string) {
@@ -20,18 +22,18 @@ function period(mode: string, selected: string) {
 }
 export default function Profits({ token }: { token?: string }) {
   const accountPath = useAccountPath();
-  const [mode, setMode] = useState("Histórico");
-  const [date, setDate] = useState(today);
-  const [net, setNet] = useState(false);
+  const [mode, setMode] = useViewState("app/profits.tsx:mode", "Histórico");
+  const [date, setDate] = useViewState("app/profits.tsx:date", today);
+  const [net, setNet] = useViewState("app/profits.tsx:net", false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const [detailFilter, setDetailFilter] = useState<"all" | "pending" | "calculable">("all");
-  const [detailSort, setDetailSort] = useState("pending");
-  const [detailSearch, setDetailSearch] = useState("");
-  const [result, setResult] = useState<{ sales: Sale[]; state: State; from: string; to: string; time: string }>();
+  const [detailFilter, setDetailFilter] = useViewState<"all" | "pending" | "calculable">("app/profits.tsx:detailFilter", "all");
+  const [detailSort, setDetailSort] = useViewState("app/profits.tsx:detailSort", "pending");
+  const [detailSearch, setDetailSearch] = useViewState("app/profits.tsx:detailSearch", "");
+  const [result, setResult] = useViewState<{ sales: Sale[]; state: State; from: string; to: string; time: string }>("app/profits.tsx:result");
   const controller = useRef<AbortController | null>(null);
-  useEffect(() => { controller.current?.abort(); setResult(undefined); setBusy(false); return () => controller.current?.abort(); }, [token]);
+  useEffect(() => { controller.current?.abort(); setBusy(false); return () => controller.current?.abort(); }, [token]);
   async function refreshCosts() {
     if (!token) return;
     try {
@@ -56,13 +58,22 @@ export default function Profits({ token }: { token?: string }) {
       setProgress("Buscando las ventas del período…");
       const sales = await queryProfitSales(range, (page) => json("/api/profit", page), (count, total) => {
         if (!request.signal.aborted) setProgress(`${count} de ${total} ventas consultadas`);
-      });      if (!request.signal.aborted) setResult({ sales, state, ...range, time: new Date().toLocaleString("es-AR") });
+      });
+      if (sales.some((sale) => sale.mode === "flex" && !sale.cancelled)) {
+        setProgress("Consultando bonificaciones de envíos Flex…");
+        try {
+          const { credits }: { credits: FlexCredit[] } = await json("/api/profit/flex", { from: range.from });
+          for (const sale of sales) if (sale.mode === "flex") sale.flexCredits = credits.filter((credit) => credit.shipmentId === sale.shipmentId);
+        } catch (e) {
+          if (request.signal.aborted) throw e;
+          for (const sale of sales) if (sale.mode === "flex") sale.flexCreditsUnavailable = true;
+        }
+      }
+      if (!request.signal.aborted) setResult({ sales, state, ...range, time: new Date().toLocaleString("es-AR") });
     } catch (e) { if (!request.signal.aborted) setError((e as Error).message); }
     finally { if (!request.signal.aborted) { setBusy(false); setProgress(""); } }
   }
-  const rows = useMemo(() => result ? profitRows(result.state, result.sales).filter((row) =>
-    !row.sale.cancelled && row.sale.orderStatus !== "cancelled" && row.sale.shippingStatus !== "cancelled",
-  ) : [], [result]);
+  const rows = useMemo(() => result ? profitRows(result.state, result.sales.filter((sale) => !sale.cancelled && sale.orderStatus !== "cancelled" && sale.shippingStatus !== "cancelled")) : [], [result]);
   const visibleRows = useMemo(() => {
     const query = detailSearch.trim().toLocaleLowerCase("es-AR");
     const productName = (row: typeof rows[number]) => row.sale.lines.map((line) => {
@@ -101,7 +112,7 @@ export default function Profits({ token }: { token?: string }) {
     return values;
   }, [result, rows, mode]);
   const coverageMissing = !!result && result.from < shift(today(), -364);
-  const incomplete = !!totals && (coverageMissing || (net ? totals.missingNet > 0 || totals.missingMonths.length > 0 : totals.missingGross > 0));
+  const incomplete = !!totals && (coverageMissing || (net ? totals.missingNet > 0 : totals.missingGross > 0));
   const max = Math.max(1, ...buckets.map((bucket) => Math.abs(net ? bucket.net : bucket.gross)));
   return <div className="profits-view">
     <div className="toolbar"><label>Período<select value={mode} disabled={busy} onChange={(e) => { setMode(e.target.value); setResult(undefined); }}>{["Histórico", "Año", "Mes", "Semana", "Día"].map((label) => <option key={label}>{label}</option>)}</select></label>
@@ -109,26 +120,16 @@ export default function Profits({ token }: { token?: string }) {
       <button className="primary" disabled={busy || !token || !date} onClick={() => void consult()}>Consultar ganancias</button>
       <label className="profit-switch"><input type="checkbox" role="switch" checked={net} onChange={(e) => setNet(e.target.checked)} /> Ganancias netas</label>
     </div>
-    <p className="table-note">Bruto = total vendido en ARS de pedidos pagados. Neto estimado = neto recibido − proveedor − logística propia − gastos mensuales. Se usa la fecha de creación de la venta y sus costos vigentes. No es un reporte de dinero disponible o liberado.</p>
+    <p className="table-note">Bruto = total vendido en ARS de pedidos pagados. Neto estimado = neto recibido − proveedor − logística propia. Se usa la fecha de creación de la venta y sus costos vigentes. No es un reporte de dinero disponible o liberado.</p>
     <p className="notice">Histórico disponible: últimos 365 días consultados. Mercado Libre limita el acceso a órdenes antiguas (hasta 12 meses). Los años anteriores pueden estar incompletos. Las ventas no se guardan en la base de datos.</p>
     {busy && <p className="query-progress" role="status">{progress || "Preparando consulta…"} <button onClick={() => { controller.current?.abort(); setBusy(false); setProgress(""); }}>Cancelar</button></p>}
     {error && <p className="warning" role="alert">{error}</p>}
     {totals && result && <>
       <div className="profit-cards"><section className="panel profit-card"><small>{net ? "Ganancia neta estimada" : "Total vendido · bruto"}{incomplete ? " · parcial" : ""}</small><strong>{money(net ? totals.net : totals.gross)}</strong><span>{result.from} al {result.to}</span></section>
         <section className="panel profit-card"><small>Ventas consultadas</small><strong>{totals.count}</strong><span>Actualizado: {result.time}</span></section>
-        {net && <section className="panel profit-card"><small>Gastos mensuales del período</small><strong>{money(totals.expenses.total)}</strong><span>Monotributo {money(totals.expenses.tax)} · Adicionales ML {money(totals.expenses.billing)}</span></section>}
       </div>
-      {net && <details className="panel expense-explanation"><summary>Cómo se descuentan los gastos mensuales</summary>
-        <p>Importe mensual ÷ días del mes × días incluidos en el filtro. Se aplica a los días calendario, aunque no haya ventas. Los centavos se distribuyen entre días para que un mes completo coincida exactamente con lo cargado.</p>
-        {expenseBreakdown(business, result.from, result.to).map((part) => <div className="expense-month" key={part.month}>
-          <strong>{part.month} · {part.days} de {part.daysInMonth} días</strong>
-          {part.configured ? <><p>Monotributo mensual: {money(part.configured.taxCents)} → se descuentan <strong>{money(part.tax)}</strong>.</p><p>Cargos ML mensuales: {money(part.configured.billingCents)} → se descuentan <strong>{money(part.billing)}</strong>.</p></> : <p>Pendiente de carga: no se descontó un importe para este mes.</p>}
-        </div>)}
-        <p><strong>Neto del período = suma de netos calculables ({money(totals.net + totals.expenses.total)}) − gastos mensuales ({money(totals.expenses.total)}) = {money(totals.net)}.</strong></p>
-        <p>Los cargos ML deben incluir únicamente publicidad y otros cargos que no estén ya descontados del recibido.</p>
-      </details>}
-      {incomplete && <p className="warning">Resultado parcial: {coverageMissing && "El período excede el historial disponible. "}{net ? `${totals.missingNet} ventas sin neto calculable. Meses con gastos pendientes: ${totals.missingMonths.join(", ") || "ninguno"}.` : `${totals.missingGross} ventas excluidas por estado o importe no disponible.`} Los importes desconocidos no se toman como cero; esas ventas quedan fuera del subtotal.</p>}
-      {net && <p className="table-note">Revisá el neto recibido contra una liquidación real: puede haber reintegros Flex, retenciones o cargos facturados por separado. Cargá ajustes en “Completar importes” y solo cargos mensuales no descontados. Un envío Flex compartido se cobra una vez entre las órdenes consultadas. Cancelaciones y devoluciones quedan pendientes de revisión.</p>}
+      {incomplete && <p className="warning">Resultado parcial: {coverageMissing && "El período excede el historial disponible. "}{net ? `${totals.missingNet} ventas sin neto calculable.` : `${totals.missingGross} ventas excluidas por estado o importe no disponible.`} Los importes desconocidos no se toman como cero; esas ventas quedan fuera del subtotal.</p>}
+      {net && <p className="table-note">El recibido incorpora las bonificaciones Flex verificadas, una sola vez por movimiento. Si no se puede conciliar una bonificación con el pago, la venta queda pendiente. Cargá ajustes en “Completar importes”. Un envío Flex compartido se cobra una vez entre las órdenes consultadas. Cancelaciones y devoluciones quedan pendientes de revisión.</p>}
       <section className="panel profit-chart"><h2>{net ? "Evolución del neto estimado" : "Evolución de ventas brutas"}{incomplete ? " · parcial" : ""}</h2>
         {buckets.map((bucket) => { const value = net ? bucket.net : bucket.gross; return <div className="profit-bar-row" key={bucket.label}><span>{bucket.label}</span><div className="profit-bar-track"><div className={value < 0 ? "profit-bar negative" : "profit-bar"} style={{ width: `${Math.max(0, Math.abs(value) / max * 100)}%` }} /></div><strong>{money(value)}</strong></div>; })}
       </section>
@@ -138,7 +139,7 @@ export default function Profits({ token }: { token?: string }) {
           const product = row.sale.lines.map((line) => { const listing = result.state.listings?.find((item) => item.id === line.productId.split(":")[0]); return `${listing?.title ?? line.productId} × ${line.quantity}`; }).join(" · ");
           const modeLabel = row.sale.mode === "correo" ? "Mercado Envíos · correo" : row.sale.mode === "flex" ? "Flex" : "Acordar con comprador";
           const cancelled = row.sale.cancelled || row.sale.shippingStatus === "cancelled";
-          return <tr className={row.net === undefined ? "profit-pending" : undefined} key={row.sale.id}><td>{row.date.split("-").reverse().join("/")}</td><td><strong>{row.sale.id}</strong><small>{product}</small></td><td>{[row.sale.province, row.sale.city, row.sale.neighborhood].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ") || "Sin ubicación"}</td><td><span className={`shipping-kind ${cancelled ? "cancelled" : row.sale.mode}`}>{cancelled ? "Cancelado" : modeLabel}</span>{cancelled && <small>Modalidad: {modeLabel}</small>}{row.flex && <small>{row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida"}</small>}{row.flex && !row.flex.zone && <small className="zone-reason">{row.flex.reason}</small>}</td><td>{row.gross === undefined ? "A revisar" : money(row.gross)}</td><td>{row.received === undefined ? "Pendiente" : money(row.received)}</td><td>{row.supplier === undefined ? "Pendiente" : money(row.supplier)}</td><td>{row.shipping === undefined ? "Pendiente" : money(row.shipping)}</td><td className={row.net === undefined ? "pending-value" : "net-value"}>{row.net === undefined ? "Pendiente" : money(row.net)}</td><td><details className="sale-detail"><summary>{row.issues.length ? `${row.issues.length} pendiente${row.issues.length === 1 ? "" : "s"}` : "Ver detalle"}</summary>{!!row.issues.length && <ul>{row.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}<p>El neto de la venta no descuenta los gastos mensuales; se restan una vez del total del período.</p>{row.flex && <p>Flex: {row.flex.reason}{row.flex.baselineRate ? " · tarifa base estimada" : ""}{row.shipping === 0 && row.flex.cents ? " · costo incluido en otra orden del envío" : ""}</p>}<OrderNoteEditor financial order={row.sale} note={business.notes[row.sale.id]} token={token} onSaved={() => void refreshCosts()} /></details></td></tr>;
+          return <tr className={row.net === undefined ? "profit-pending" : undefined} key={row.sale.id}><td>{row.date.split("-").reverse().join("/")}</td><td><strong>{row.sale.id}</strong><small>{product}</small></td><td>{[row.sale.province, row.sale.city, row.sale.neighborhood].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ") || "Sin ubicación"}</td><td><span className={`shipping-kind ${cancelled ? "cancelled" : row.sale.mode}`}>{cancelled ? "Cancelado" : modeLabel}</span>{cancelled && <small>Modalidad: {modeLabel}</small>}{row.flex && <small>{row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida"}</small>}{row.flex && !row.flex.zone && <small className="zone-reason">{row.flex.reason}</small>}</td><td>{row.gross === undefined ? "A revisar" : money(row.gross)}</td><td>{row.received === undefined ? "Pendiente" : money(row.received)}</td><td>{row.supplier === undefined ? "Pendiente" : money(row.supplier)}</td><td>{row.shipping === undefined ? "Pendiente" : money(row.shipping)}</td><td className={row.net === undefined ? "pending-value" : "net-value"}>{row.net === undefined ? "Pendiente" : money(row.net)}</td><td><details className="sale-detail"><summary>{row.issues.length ? `${row.issues.length} pendiente${row.issues.length === 1 ? "" : "s"}` : "Ver detalle"}</summary>{!!row.issues.length && <ul>{row.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}{row.flex && <p>Flex: {row.flex.reason}{row.flex.baselineRate ? " · tarifa base estimada" : ""}{row.shipping === 0 && row.flex.cents ? " · costo incluido en otra orden del envío" : ""}</p>}{row.sale.mode === "flex" && <p>Bonificaciones Flex: {row.sale.flexCreditsUnavailable ? "No se pudieron consultar" : money(row.bonus)}{row.bonusCount > 0 ? row.manualNet ? " · incluido en el recibido manual" : row.bonusUnresolved ? " · conciliación pendiente" : row.bonusAdded !== 0 ? " · sumado al recibido" : " · ya incluido en el pago" : " · sin movimientos informados"}.</p>}<OrderNoteEditor financial order={row.sale} note={business.notes[row.sale.id]} token={token} onSaved={() => void refreshCosts()} /></details></td></tr>;
         })}</tbody></table></div>
         {!visibleRows.length && <p className="empty">No se encontraron ventas con esos filtros.</p>}
       </section>    </>}

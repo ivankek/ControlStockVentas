@@ -257,14 +257,14 @@ export async function importOrders(user: string, previous: State, queryDate?: st
         }
         if (["not_delivered", "cancelled"].includes(s.status))
           order.review =
-            "Envío cancelado o no entregado: revisar con el proveedor";
+            "Envío cancelado o no entregado";
         if (s.logistic_type === "fulfillment")
           order.review = "Logística Full fuera del alcance inicial";
         if (!event && s.status === "delivered")
           order.review = "Entregado sin fecha de despacho verificable";
       }
       if (o.status === "partially_refunded")
-        order.review = "Reembolso parcial: revisar con el proveedor";
+        order.review = "Reembolso parcial";
       if (order.cancelled && old?.dispatchedDate)
         order.review = "Cancelación posterior al despacho: revisar ajuste";
       orders.push(order);
