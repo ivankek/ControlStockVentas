@@ -1,11 +1,11 @@
 import { owner, readState, mutate, fail } from "@/lib/server";
 import { businessCommand, emptyBusiness, updateBusiness } from "@/lib/business";
 import { verifiedOrder } from "@/lib/meli";
-import { accountFor, requestedAccount, scopedBusiness, sellerProfile } from "@/lib/inventory-server";
+import { accountFor, requestedAccount, scopedBusiness, sellerProfile, adminProfile } from "@/lib/inventory-server";
 export const maxDuration = 120;
 export async function GET(request: Request) {
   try {
-    const user = await owner(request); await sellerProfile(user);
+    const user = await owner(request); await adminProfile(user);
     let business = (await readState(user)).state.business ?? emptyBusiness();
     if (requestedAccount(request)) business = await scopedBusiness(user, await accountFor(user, requestedAccount(request)), business);
     return Response.json(business, { headers: { "Cache-Control": "no-store" } });
@@ -15,8 +15,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await owner(request);
-    await sellerProfile(user);
+    const person = await sellerProfile(user);
     const action = businessCommand.parse(await request.json());
+    // Dispatch notes remain available to sellers; financial changes are admin-only.
+    if (action.type !== "note" || action.netCents !== undefined) await adminProfile(user);
     const account = action.type === "note" ? await accountFor(user, requestedAccount(request)) : undefined;
     const order = action.type === "note" ? await verifiedOrder(user, action.id, account!.id) : undefined;
     const state = await mutate(user, (state) => {
@@ -24,6 +26,6 @@ export async function POST(request: Request) {
       if (action.type === "note") next.business!.notes[action.id].accountId = account!.id;
       return next;
     });
-    return Response.json(state.business, { headers: { "Cache-Control": "no-store" } });
+    return Response.json(person.role === "ADMIN" ? state.business : { saved: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return fail(error); }
 }

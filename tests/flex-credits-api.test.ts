@@ -32,7 +32,7 @@ test("bonificaciones: autorización por cuenta propia antes de consultar factura
   assert.equal(billed, 2);
   assert.equal((await POST(request(foreign))).status, 400);
   role = "SUPPLIER";
-  assert.equal((await POST(request(own))).status, 400);
+  assert.equal((await POST(request(own))).status, 403);
   assert.equal(billed, 2);
   assert.equal((await POST(new Request("https://app.test/api/profit/flex", { method: "POST" }))).status, 401);
 });

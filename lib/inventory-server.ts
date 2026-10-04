@@ -15,6 +15,11 @@ export async function sellerProfile(user: string) {
   if (!canConnect(p.role)) throw Error("El perfil SUPPLIER no puede operar cuentas Mercado Libre.");
   return p;
 }
+export async function adminProfile(user: string) {
+  const p = await profile(user);
+  if (p.role !== "ADMIN") throw Object.assign(new Error("Solo el administrador puede acceder a ganancias y gastos."), { status: 403 });
+  return p;
+}
 export async function snapshot(user: string): Promise<InventorySnapshot> {
   const { data, error } = await admin().rpc("inventory_snapshot", { p_actor: user });
   if (error) throw Error("No se pudo consultar inventario y permisos. Verificá la migración 002_inventory.");

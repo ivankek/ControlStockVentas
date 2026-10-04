@@ -127,6 +127,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sessionChanged = liveToken.current !== session?.access_token || liveUser.current !== session?.user.id;
       if (liveUser.current !== session?.user.id) { setInventory(undefined); setAccount(""); }
       liveUser.current = session?.user.id;
       liveToken.current = session?.access_token;
@@ -134,7 +135,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
       setToken(session?.access_token);
       if (session) {
         setDemo(false);
-        void load(session.access_token);
+        if (sessionChanged) void load(session.access_token);
       } else {
         setState(emptyState());
         setDemo(false);
@@ -282,8 +283,11 @@ export default function Dashboard({ configured }: { configured: boolean }) {
       .join(" · ");
   async function inventoryCommand(action?: unknown) {
     const data = await api("/api/inventory", action);
-    if (liveToken.current === token) setInventory(data);
+    if (liveToken.current === token) { setInventory(data); if (action) setStockRevision((n) => n + 1); }
   }
+  const [stockRevision, setStockRevision] = useState(0);
+  const canViewFinance = inventory?.profile.role === "ADMIN";
+  useEffect(() => { if (!canViewFinance && ["Ganancias", "Gastos del negocio"].includes(tab)) setTab("Conexión"); }, [canViewFinance, tab]);
   const ownAccounts = inventory?.accounts.filter((a) => a.owner_id === inventory.profile.id) ?? [];
   return (
     <InventoryContext.Provider value={{ data: inventory, account, setAccount, command: inventoryCommand }}>
@@ -306,8 +310,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
             ...(demo ? [{ name: "Costos", icon: Tag }] : []),
             { name: "Stock", icon: Boxes },
             ...(inventory?.profile.role === "ADMIN" ? [{ name: "Usuarios", icon: UsersRound }] : []),
-            { name: "Gastos del negocio", icon: Receipt },
-            { name: "Ganancias", icon: Wallet },
+            ...(canViewFinance ? [{ name: "Gastos del negocio", icon: Receipt }, { name: "Ganancias", icon: Wallet }] : []),
             { name: "Conexión", icon: Link2 },
           ].filter(({ name }) => inventory?.profile.role !== "SUPPLIER" || ["Stock", "Conexión"].includes(name)).map(({ name, icon: Icon }) => (
             <button
@@ -410,12 +413,12 @@ export default function Dashboard({ configured }: { configured: boolean }) {
             </div>
           )}
           {inventory && ["Despachos", "Publicaciones", "Ganancias"].includes(tab) && <div className="toolbar"><label>Cuenta Mercado Libre<select aria-label="Cuenta Mercado Libre" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">Seleccionar cuenta</option>{ownAccounts.map((a) => <option value={a.id} key={a.id}>{a.nickname ?? "Cuenta ML"} · {a.seller_id}</option>)}</select></label>{!ownAccounts.length && <span>Conectá una cuenta desde Conexión.</span>}</div>}
-          {!demo && <StockSync token={token} revision={inventory} onUpdated={() => void inventoryCommand()} />}
+          {!demo && <StockSync token={token} revision={stockRevision} onUpdated={() => void inventoryCommand()} />}
           {tab === "Stock" && <Stock />}
           {tab === "Usuarios" && <Users />}
           {tab === "Publicaciones" && <Listings key={account} token={account ? token : undefined} />}
-          {tab === "Gastos del negocio" && <BusinessCosts key={account} token={token} />}
-          {tab === "Ganancias" && <Profits key={account} token={account ? token : undefined} />}
+          {canViewFinance && tab === "Gastos del negocio" && <BusinessCosts key={account} token={token} />}
+          {canViewFinance && tab === "Ganancias" && <Profits key={account} token={account ? token : undefined} />}
           {tab === "Despachos" && !demo && <DispatchQuery key={account} token={account ? token : undefined} />}
           {tab === "Despachos" && demo && (
             <>

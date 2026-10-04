@@ -31,7 +31,7 @@ export default function Profits({ token }: { token?: string }) {
   const [detailFilter, setDetailFilter] = useViewState<"all" | "pending" | "calculable">("app/profits.tsx:detailFilter", "all");
   const [detailSort, setDetailSort] = useViewState("app/profits.tsx:detailSort", "pending");
   const [detailSearch, setDetailSearch] = useViewState("app/profits.tsx:detailSearch", "");
-  const [result, setResult] = useViewState<{ sales: Sale[]; state: State; from: string; to: string; time: string }>("app/profits.tsx:result");
+  const [result, setResult] = useViewState<{ sales: Sale[]; state: State; from: string; to: string; time: string; flexError?: string }>("app/profits.tsx:result");
   const controller = useRef<AbortController | null>(null);
   useEffect(() => { controller.current?.abort(); setBusy(false); return () => controller.current?.abort(); }, [token]);
   async function refreshCosts() {
@@ -44,6 +44,7 @@ export default function Profits({ token }: { token?: string }) {
   }
   async function consult() {
     if (!token || !date) return;
+    if (controller.current && !controller.current.signal.aborted) return;
     controller.current?.abort(); const request = new AbortController(); controller.current = request;
     const range = period(mode, date);
     setBusy(true); setError(""); setResult(undefined);
@@ -53,6 +54,7 @@ export default function Profits({ token }: { token?: string }) {
       const data = await response.json(); if (!response.ok) throw Error(data.error || "No se pudo completar la consulta."); return data;
     }
     try {
+      let flexError: string | undefined;
       const [catalog, business] = await Promise.all([json("/api/listings"), json("/api/business")]);
       const state: State = { ...emptyState(), listings: catalog.listings, supplierProducts: catalog.products, supplierLinks: catalog.links, business };
       setProgress("Buscando las ventas del período…");
@@ -66,12 +68,13 @@ export default function Profits({ token }: { token?: string }) {
           for (const sale of sales) if (sale.mode === "flex") sale.flexCredits = credits.filter((credit) => credit.shipmentId === sale.shipmentId);
         } catch (e) {
           if (request.signal.aborted) throw e;
+          flexError = e instanceof Error ? e.message : "No se pudo consultar la facturación Flex.";
           for (const sale of sales) if (sale.mode === "flex") sale.flexCreditsUnavailable = true;
         }
       }
-      if (!request.signal.aborted) setResult({ sales, state, ...range, time: new Date().toLocaleString("es-AR") });
+      if (!request.signal.aborted) setResult({ sales, state, ...range, time: new Date().toLocaleString("es-AR"), flexError });
     } catch (e) { if (!request.signal.aborted) setError((e as Error).message); }
-    finally { if (!request.signal.aborted) { setBusy(false); setProgress(""); } }
+    finally { if (!request.signal.aborted) { setBusy(false); setProgress(""); } if (controller.current === request) controller.current = null; }
   }
   const rows = useMemo(() => result ? profitRows(result.state, result.sales.filter((sale) => !sale.cancelled && sale.orderStatus !== "cancelled" && sale.shippingStatus !== "cancelled")) : [], [result]);
   const visibleRows = useMemo(() => {
@@ -124,6 +127,7 @@ export default function Profits({ token }: { token?: string }) {
     <p className="notice">Histórico disponible: últimos 365 días consultados. Mercado Libre limita el acceso a órdenes antiguas (hasta 12 meses). Los años anteriores pueden estar incompletos. Las ventas no se guardan en la base de datos.</p>
     {busy && <p className="query-progress" role="status">{progress || "Preparando consulta…"} <button onClick={() => { controller.current?.abort(); setBusy(false); setProgress(""); }}>Cancelar</button></p>}
     {error && <p className="warning" role="alert">{error}</p>}
+    {result?.flexError && <p className="warning" role="alert">No se pudieron verificar las bonificaciones Flex. {result.flexError} No se interpretan como $0.</p>}
     {totals && result && <>
       <div className="profit-cards"><section className="panel profit-card"><small>{net ? "Ganancia neta estimada" : "Total vendido · bruto"}{incomplete ? " · parcial" : ""}</small><strong>{money(net ? totals.net : totals.gross)}</strong><span>{result.from} al {result.to}</span></section>
         <section className="panel profit-card"><small>Ventas consultadas</small><strong>{totals.count}</strong><span>Actualizado: {result.time}</span></section>
@@ -139,7 +143,7 @@ export default function Profits({ token }: { token?: string }) {
           const product = row.sale.lines.map((line) => { const listing = result.state.listings?.find((item) => item.id === line.productId.split(":")[0]); return `${listing?.title ?? line.productId} × ${line.quantity}`; }).join(" · ");
           const modeLabel = row.sale.mode === "correo" ? "Mercado Envíos · correo" : row.sale.mode === "flex" ? "Flex" : "Acordar con comprador";
           const cancelled = row.sale.cancelled || row.sale.shippingStatus === "cancelled";
-          return <tr className={row.net === undefined ? "profit-pending" : undefined} key={row.sale.id}><td>{row.date.split("-").reverse().join("/")}</td><td><strong>{row.sale.id}</strong><small>{product}</small></td><td>{[row.sale.province, row.sale.city, row.sale.neighborhood].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ") || "Sin ubicación"}</td><td><span className={`shipping-kind ${cancelled ? "cancelled" : row.sale.mode}`}>{cancelled ? "Cancelado" : modeLabel}</span>{cancelled && <small>Modalidad: {modeLabel}</small>}{row.flex && <small>{row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida"}</small>}{row.flex && !row.flex.zone && <small className="zone-reason">{row.flex.reason}</small>}</td><td>{row.gross === undefined ? "A revisar" : money(row.gross)}</td><td>{row.received === undefined ? "Pendiente" : money(row.received)}</td><td>{row.supplier === undefined ? "Pendiente" : money(row.supplier)}</td><td>{row.shipping === undefined ? "Pendiente" : money(row.shipping)}</td><td className={row.net === undefined ? "pending-value" : "net-value"}>{row.net === undefined ? "Pendiente" : money(row.net)}</td><td><details className="sale-detail"><summary>{row.issues.length ? `${row.issues.length} pendiente${row.issues.length === 1 ? "" : "s"}` : "Ver detalle"}</summary>{!!row.issues.length && <ul>{row.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}{row.flex && <p>Flex: {row.flex.reason}{row.flex.baselineRate ? " · tarifa base estimada" : ""}{row.shipping === 0 && row.flex.cents ? " · costo incluido en otra orden del envío" : ""}</p>}{row.sale.mode === "flex" && <p>Bonificaciones Flex: {row.sale.flexCreditsUnavailable ? "No se pudieron consultar" : money(row.bonus)}{row.bonusCount > 0 ? row.manualNet ? " · incluido en el recibido manual" : row.bonusUnresolved ? " · conciliación pendiente" : row.bonusAdded !== 0 ? " · sumado al recibido" : " · ya incluido en el pago" : " · sin movimientos informados"}.</p>}<OrderNoteEditor financial order={row.sale} note={business.notes[row.sale.id]} token={token} onSaved={() => void refreshCosts()} /></details></td></tr>;
+          return <tr className={row.net === undefined ? "profit-pending" : undefined} key={row.sale.id}><td>{row.date.split("-").reverse().join("/")}</td><td><strong>{row.sale.id}</strong><small>{product}</small></td><td>{[row.sale.province, row.sale.city, row.sale.neighborhood].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ") || "Sin ubicación"}</td><td><span className={`shipping-kind ${cancelled ? "cancelled" : row.sale.mode}`}>{cancelled ? "Cancelado" : modeLabel}</span>{cancelled && <small>Modalidad: {modeLabel}</small>}{row.flex && <small>{row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida"}</small>}{row.flex && !row.flex.zone && <small className="zone-reason">{row.flex.reason}</small>}</td><td>{row.gross === undefined ? "A revisar" : money(row.gross)}</td><td>{row.received === undefined ? "Pendiente" : money(row.received)}</td><td>{row.supplier === undefined ? "Pendiente" : money(row.supplier)}</td><td>{row.shipping === undefined ? "Pendiente" : money(row.shipping)}</td><td className={row.net === undefined ? "pending-value" : "net-value"}>{row.net === undefined ? "Pendiente" : money(row.net)}</td><td><details className="sale-detail"><summary>{row.issues.length ? `${row.issues.length} pendiente${row.issues.length === 1 ? "" : "s"}` : "Ver detalle"}</summary>{!!row.issues.length && <ul>{row.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}{row.flex && <p>Flex: {row.flex.reason}{row.flex.baselineRate ? " · tarifa base estimada" : ""}{row.shipping === 0 && row.flex.cents ? " · costo incluido en otra orden del envío" : ""}</p>}{row.sale.mode === "flex" && <p>Bonificaciones Flex: {row.sale.flexCreditsUnavailable ? "No se pudieron consultar" : money(row.bonus)}{row.bonusCount > 0 ? row.manualNet ? " · incluido en el recibido manual" : row.bonusUnresolved ? " · conciliación pendiente" : row.bonusAdded !== 0 ? " · sumado al recibido" : " · ya incluido en el pago" : row.sale.flexCreditsUnavailable ? "" : " · sin movimientos informados"}.</p>}<details><summary>Datos recibidos de la API</summary><p>Orden: {row.sale.id} · Envío: {row.sale.shipmentId ?? "No informado"}</p><p>Pagos: {row.sale.paymentIds.join(", ") || "No informados"}</p><p>Neto recibido de Mercado Pago (net_received_amount): {row.sale.receivedCents === undefined ? "No disponible" : money(row.sale.receivedCents)}</p><p>Base calculada del desglose del pago: {row.sale.paymentBaseCents === undefined ? "Desglose insuficiente" : money(row.sale.paymentBaseCents)}</p><p>Movimientos Flex de facturación: {row.sale.flexCreditsUnavailable ? "Consulta fallida" : row.sale.flexCredits?.map((credit) => `${credit.id}: ${money(credit.cents)}`).join(" · ") || "Ninguno informado"}</p></details><OrderNoteEditor financial order={row.sale} note={business.notes[row.sale.id]} token={token} onSaved={() => void refreshCosts()} /></details></td></tr>;
         })}</tbody></table></div>
         {!visibleRows.length && <p className="empty">No se encontraron ventas con esos filtros.</p>}
       </section>    </>}

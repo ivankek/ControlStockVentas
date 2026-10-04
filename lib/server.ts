@@ -56,7 +56,7 @@ export function fail(error: unknown) {
     error instanceof Error
       ? error.message
       : "No se pudo completar la operación.";
-  const status = /sesión/.test(msg) ? 401 : 400;
+  const status = error instanceof Error && "status" in error && error.status === 403 ? 403 : /sesión/.test(msg) ? 401 : 400;
   return Response.json(
     { error: msg },
     { status, headers: { "Cache-Control": "no-store" } },

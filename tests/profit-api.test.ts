@@ -11,6 +11,7 @@ test("ganancias consulta API ML y MP sin persistir ventas; notas verifican propi
   let unauthorized = false;
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.pathname === "/rest/v1/app_profiles") return Response.json({ id: "owner", role: "ADMIN" });
     const inventory = inventoryReadMock(url, tokens); if (inventory) return inventory;
     assert.equal(init?.method ?? "GET", "GET", "No debe haber escrituras externas");
     if (url.pathname === "/auth/v1/user") return Response.json({ id: "owner" });

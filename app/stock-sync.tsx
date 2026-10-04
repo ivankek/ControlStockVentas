@@ -17,20 +17,24 @@ export default function StockSync({ token, revision, onUpdated }: { token?: stri
     if (!token) { setJobs([]); setSales([]); setDismissed(""); lastStatus.current = ""; return; }
     setJobs([]); setSales([]); setError("");
     let stopped = false;
+    const controller = new AbortController();
+    let delay = 60000;
     let timer: ReturnType<typeof setTimeout>;
     async function call(body?: object) {
-      const response = await fetch(`/api/inventory/sync${account ? `?account=${encodeURIComponent(account)}` : ""}`, { method: body ? "POST" : "GET", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      const response = await fetch(`/api/inventory/sync${account ? `?account=${encodeURIComponent(account)}` : ""}`, { method: body ? "POST" : "GET", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined, signal: controller.signal });
       const data = await response.json();
       if (!response.ok) throw Error(data.error || "No se pudo sincronizar el stock.");
       return data as { jobs: Job[]; sales: Sale[]; processed?: boolean };
     }
     async function tick() {
       try {
+        if (document.hidden) return;
         let result = await call();
         if (stopped) return;
         const retryOne = retryRequested.current;
         retryRequested.current = false;
-        if (retryOne || result.jobs.some((j) => ["pending", "running"].includes(j.status))) result = await call({ retry: retryOne });
+        if (retryOne || result.jobs.some((j) => j.status === "pending")) result = await call({ retry: retryOne });
+        delay = result.jobs.some((j) => ["pending", "running"].includes(j.status)) ? 10000 : 60000;
         if (!stopped) {
           setJobs(result.jobs); setSales(result.sales); setError("");
           const fingerprint = JSON.stringify([result.jobs, result.sales]);
@@ -38,11 +42,11 @@ export default function StockSync({ token, revision, onUpdated }: { token?: stri
           lastStatus.current = fingerprint;
           if (result.processed || changed) updated.current();
         }
-      } catch (e) { if (!stopped) setError((e as Error).message); }
-      finally { if (!stopped) timer = setTimeout(() => void tick(), 4000); }
+      } catch (e) { delay = 60000; if (!stopped) setError((e as Error).message); }
+      finally { if (!stopped) timer = setTimeout(() => void tick(), delay); }
     }
     void tick();
-    return () => { stopped = true; clearTimeout(timer); };
+    return () => { stopped = true; clearTimeout(timer); controller.abort(); };
   }, [token, account, revision, retry]);
   if (!token) return null;
   const pending = jobs.filter((j) => ["pending", "running"].includes(j.status));

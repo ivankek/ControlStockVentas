@@ -10,6 +10,11 @@ const credit = { id: "900", shipmentId: "1000", orderId: "100", cents: 899000 };
 const sale = (more: Partial<Sale> = {}): Sale => ({ id: "100", createdAt: "2026-09-28T12:00:00Z", orderStatus: "paid", cancelled: false, mode: "flex", province: "Buenos Aires", city: "Boulogne", shipmentId: "1000", lines: [{ productId: "MLA1:0", quantity: 1 }], grossCents: 2000000, receivedCents: 1396000, paymentBaseCents: 1396000, paymentIds: ["500"], flexCredits: [credit], issues: [], ...more });
 const state = () => ({ ...emptyState(), business: emptyBusiness(), supplierProducts: [{ id: "p", name: "Tensiómetro", costs: [{ from: "2026-09-01", cents: 1050000 }] }], supplierLinks: { "MLA1:0": { supplierId: "p", units: 1 } } });
 
+test("error de facturación identifica el recurso y nunca se interpreta como cero", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({}, { status: 403 }));
+  await assert.rejects(flexCredits("private-token", "2026-09-01"), /Períodos de facturación BILL:.*403/);
+});
+
 test("bonificación del ejemplo: 13.960 + 8.990 = 22.950, sin duplicar ni agregar a correo", () => {
   const row = profitRows(state(), [sale()])[0];
   assert.equal(row.received, 2295000);

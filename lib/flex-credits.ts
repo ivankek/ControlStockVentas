@@ -15,6 +15,15 @@ export function parseFlexCredit(detail: Detail): FlexCredit | undefined {
 function validate<T>(page: Page<T>) {
   if (!Array.isArray(page.results) || !Number.isInteger(page.total) || page.total < 0 || page.errors?.length) throw Error("Consulta de bonificaciones incompleta");
 }
+async function billingPage<T>(path: string, token: string, context: string): Promise<Page<T>> {
+  try {
+    const page = await get<Page<T>>(path, token);
+    validate(page);
+    return page;
+  } catch (error) {
+    throw Error(`${context}: ${error instanceof Error ? error.message : "consulta incompleta"}`);
+  }
+}
 // Billing cycles depend on the seller. Query their actual keys, including later
 // periods where a credit or reversal for an earlier sale may have been posted.
 export async function flexCredits(token: string, from: string): Promise<FlexCredit[]> {
@@ -23,8 +32,7 @@ export async function flexCredits(token: string, from: string): Promise<FlexCred
     const periods: { key: string; period: { date_to: string } }[] = [];
     for (let offset = 0; ; offset += 12) {
       if (offset >= 120) throw Error("Demasiados períodos de facturación");
-      const page = await get<Page<typeof periods[number]>>(`/billing/integration/monthly/periods?group=ML&document_type=${document}&offset=${offset}&limit=12`, token);
-      validate(page);
+      const page = await billingPage<typeof periods[number]>(`/billing/integration/monthly/periods?group=ML&document_type=${document}&offset=${offset}&limit=12`, token, `Períodos de facturación ${document}`);
       periods.push(...page.results.filter((p) => p.period?.date_to >= from));
       if (offset + page.results.length >= page.total) break;
       if (!page.results.length) throw Error("La consulta de períodos no avanzó");
@@ -34,8 +42,7 @@ export async function flexCredits(token: string, from: string): Promise<FlexCred
       let cursor = "0", read = 0;
       for (let pages = 0; ; pages++) {
         if (pages >= 100) throw Error("Demasiadas bonificaciones en un período");
-        const page = await get<Page<Detail>>(`/billing/integration/periods/key/${period.key}/group/ML/flex/details?document_type=${document}&limit=1000&from_id=${encodeURIComponent(cursor)}&sort_by=ID&order_by=ASC`, token);
-        validate(page);
+        const page = await billingPage<Detail>(`/billing/integration/periods/key/${period.key}/group/ML/flex/details?document_type=${document}&limit=1000&from_id=${encodeURIComponent(cursor)}&sort_by=ID&order_by=ASC`, token, `Bonificaciones Flex ${document}, período ${period.key}`);
         for (const detail of page.results) {
           const credit = parseFlexCredit(detail);
           if (!credit) continue;

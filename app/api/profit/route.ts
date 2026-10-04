@@ -2,12 +2,13 @@ import { z } from "zod";
 import { owner, fail } from "@/lib/server";
 import { salesPage } from "@/lib/meli-profit";
 import { today } from "@/lib/domain";
-import { accountFor, requestedAccount } from "@/lib/inventory-server";
+import { accountFor, requestedAccount, adminProfile } from "@/lib/inventory-server";
 export const maxDuration = 300;
 const schema = z.object({ from: z.iso.date(), to: z.iso.date(), offset: z.number().int().min(0).max(9950).default(0) });
 export async function POST(request: Request) {
   try {
     const user = await owner(request);
+    await adminProfile(user);
     const { from, to, offset } = schema.parse(await request.json());
     if (from > to || to > today() || Date.parse(to) - Date.parse(from) > 366 * 86400000) throw Error("Revisá el período de consulta (hasta un año).");
     const account = await accountFor(user, requestedAccount(request));

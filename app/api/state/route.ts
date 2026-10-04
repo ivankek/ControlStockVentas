@@ -5,6 +5,7 @@ export async function GET(request: Request) {
     const id = await owner(request);
     const { state } = await readState(id);
     const inventory = await snapshot(id);
+    if (inventory.profile.role !== "ADMIN") delete state.business;
     return Response.json(
       { state, connected: inventory.accounts.some((a) => a.owner_id === id), inventory },
       { headers: { "Cache-Control": "no-store" } },
