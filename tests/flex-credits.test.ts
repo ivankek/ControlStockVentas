@@ -39,7 +39,9 @@ test("subsidio como ingreso Flex: ejemplo 44.437,50 - 6.287,91 + 899 = 39.048,59
   assert.equal(profitRows(state(), [{ ...input, receivedCents: 3904859 }])[0].bonusAdded, 0);
   assert.equal(profitRows(state(), [{ ...input, receivedCents: 3904859 }])[0].received, 3904859);
   assert.equal(profitRows(state(), [{ ...input, mode: "correo" }])[0].received, 3814959);
-  assert.equal(profitRows(state(), [{ ...input, paymentBaseCents: undefined }])[0].net, undefined);
+  assert.equal(profitRows(state(), [{ ...input, paymentBaseCents: undefined }])[0].received, 3904859);
+  assert.equal(profitRows(state(), [{ ...input, paymentBaseCents: undefined }])[0].net, row.net);
+  assert.equal(profitRows(state(), [{ ...input, receivedCents: 3200000 }])[0].received, 3289900, "un desglose diferente no bloquea sumar el importe informado");
   assert.equal(profitRows(state(), [{ ...input, shippingCosts: { ...shippingCosts, shippingPromotedCents: null } }])[0].net, undefined);
   assert.equal(profitRows(state(), [{ ...input, shippingCosts: { ...shippingCosts, shippingPromotedCents: 0 } }])[0].received, 3814959);
   const manual = state(); manual.business.notes[input.id] = { updatedAt: "", netCents: 3904859 };
@@ -47,8 +49,8 @@ test("subsidio como ingreso Flex: ejemplo 44.437,50 - 6.287,91 + 899 = 39.048,59
   assert.equal(profitRows(state(), [{ ...input, flexCredits: [{ ...credit, cents: 89900 }] }])[0].received, 3904859, "facturación y subsidy no se suman dos veces");
   const shared = profitRows(state(), [input, { ...input, id: "101", paymentIds: ["501"] }]);
   assert.equal(shared.reduce((sum, r) => sum + r.bonus, 0), 89900);
-  assert.equal(shared[0].net, undefined, "no asignar arbitrariamente ingreso compartido");
-  assert.equal(shared[1].net, undefined, "ninguna orden del envío compartido se da por conciliada sin verificar");
+  assert.equal(shared.reduce((sum, r) => sum + r.bonusAdded, 0), 89900);
+  assert.ok(shared.every((r) => r.net !== undefined && !r.bonusUnresolved));
 });
 test("bonificaciones compartidas, neto manual y conciliaciones pendientes", () => {
   const rows = profitRows(state(), [sale(), sale({ id: "101", paymentIds: ["501"] })]);

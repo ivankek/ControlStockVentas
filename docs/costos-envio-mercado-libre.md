@@ -24,9 +24,12 @@ pero ya no se llama automáticamente al consultar ganancias.
 Por instrucción del usuario, shippingPromotedCents se trata como ingreso Flex
 en la aplicación. Si el recibido coincide con la base del desglose del pago,
 se agrega una vez. Si coincide con base más bonificación, ya está incluido.
-Si falta el desglose o el importe no concilia, el neto queda pendiente. El neto
-manual se considera total y no se modifica. Envíos compartidos requieren
-asignación manual del recibido. Movimientos contables explícitos tienen prioridad
+Por instrucción posterior del usuario, si falta el desglose o no coincide,
+se agrega igualmente el importe informado, sin bloquear el neto por conciliación.
+El neto manual se considera total y no se modifica. En envíos compartidos la
+bonificación se asigna una vez, a la primera orden por ID, al igual que la
+logística propia; no se repite en las otras órdenes. Los pagos compartidos
+siguen requiriendo asignación manual del recibido. Movimientos contables explícitos tienen prioridad
 sobre este importe; no se suman las dos fuentes. Correo mantiene el dato informativo.
 
 Los errores de packs, shipments o costs se exponen en shippingError y no eliminan
