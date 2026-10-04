@@ -2,7 +2,8 @@ import { localDate, type Order, type State } from "./domain";
 import { emptyBusiness, resolveFlex, resolveFlexShipments, type Business } from "./business";
 import { supplierReport } from "./supplier";
 import type { FlexCredit } from "./flex-credits";
-export type Sale = Order & { grossCents?: number; receivedCents?: number; paymentBaseCents?: number; flexCredits?: FlexCredit[]; flexCreditsUnavailable?: boolean; paymentIds: string[]; issues: string[] };
+import type { SaleShipping } from "./sale-shipping";
+export type Sale = Order & { shippingCosts?: SaleShipping; flexReconciliation?: "deferred"; grossCents?: number; receivedCents?: number; paymentBaseCents?: number; flexCredits?: FlexCredit[]; flexCreditsUnavailable?: boolean; paymentIds: string[]; issues: string[] };
 export function monthlyExpenses(business: Business, from: string, to: string) {
   let tax = 0, billing = 0;
   for (let day = from; day <= to; day = new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10)) {

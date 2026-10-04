@@ -4,14 +4,14 @@ import { salesPage } from "@/lib/meli-profit";
 import { today } from "@/lib/domain";
 import { accountFor, requestedAccount, adminProfile } from "@/lib/inventory-server";
 export const maxDuration = 300;
-const schema = z.object({ from: z.iso.date(), to: z.iso.date(), offset: z.number().int().min(0).max(9950).default(0) });
+const schema = z.object({ from: z.iso.date(), to: z.iso.date(), offset: z.number().int().min(0).max(9950).default(0), queryId: z.uuid().optional() });
 export async function POST(request: Request) {
   try {
     const user = await owner(request);
     await adminProfile(user);
-    const { from, to, offset } = schema.parse(await request.json());
+    const { from, to, offset, queryId } = schema.parse(await request.json());
     if (from > to || to > today() || Date.parse(to) - Date.parse(from) > 366 * 86400000) throw Error("Revisá el período de consulta (hasta un año).");
     const account = await accountFor(user, requestedAccount(request));
-    return Response.json(await salesPage(user, from, to, offset, account.id), { headers: { "Cache-Control": "no-store" } });
+    return Response.json(await salesPage(user, from, to, offset, account.id, queryId), { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return fail(error); }
 }
