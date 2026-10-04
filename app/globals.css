@@ -698,13 +698,13 @@ h1 { margin-bottom: 6px; font-size: 30px; }
 .profit-grid-controls input, .profit-grid-controls select { min-width: 180px; padding: 9px 10px; border: 1px solid #d8e1de; border-radius: 8px; background: white; color: var(--ink); font: inherit; }
 .profit-grid-controls input { min-width: min(300px, calc(100vw - 96px)); }
 .profit-table-wrap { max-height: 70dvh; overflow: auto; }
-.profit-table { min-width: 1280px; white-space: normal; font-variant-numeric: tabular-nums; }
+.profit-table { min-width: 1410px; white-space: normal; font-variant-numeric: tabular-nums; }
 .profit-table th { position: sticky; top: 0; z-index: 1; white-space: nowrap; border-bottom: 1px solid var(--line); }
 .profit-table td { vertical-align: top; padding-top: 14px; padding-bottom: 14px; }
-.profit-table td:nth-child(1), .profit-table td:nth-child(5), .profit-table td:nth-child(6), .profit-table td:nth-child(7), .profit-table td:nth-child(8), .profit-table td:nth-child(9) { white-space: nowrap; }
+.profit-table td:nth-child(1), .profit-table td:nth-child(5), .profit-table td:nth-child(6), .profit-table td:nth-child(7), .profit-table td:nth-child(8), .profit-table td:nth-child(9), .profit-table td:nth-child(10) { white-space: nowrap; }
 .profit-table td:nth-child(2) { min-width: 220px; max-width: 320px; }
 .profit-table td:nth-child(3) { min-width: 160px; max-width: 220px; }
-.profit-table td:nth-child(10) { min-width: 170px; }
+.profit-table td:nth-child(11) { min-width: 170px; }
 .profit-table strong { display: block; font-size: 13px; }
 .profit-table small { display: block; margin-top: 5px; color: var(--muted); line-height: 1.35; }
 .shipping-kind { display: inline-flex; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }

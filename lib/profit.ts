@@ -43,8 +43,22 @@ export function profitRows(state: State, sales: Sale[]) {
     let received = note?.netCents ?? sale.receivedCents;
     if (note?.netCents === undefined && sale.paymentIds.some((id) => paymentCounts.get(id)! > 1)) { received = undefined; issues.push("Pago compartido: completar el neto correspondiente a esta orden"); }
     let bonus = 0, bonusAdded = 0, bonusCount = 0, bonusUnresolved = false;
+    const bonusFromShipping = sale.mode === "flex" && sale.flexCredits === undefined && sale.shippingCosts !== undefined;
     if (sale.mode === "flex") {
-      for (const credit of sale.flexCredits ?? []) {
+      // User-selected rule: treat the reported shipping subsidy as Flex income.
+      // Explicit billing movements take precedence; never combine both sources.
+      const promoted = sale.shippingCosts?.shippingPromotedCents;
+      const credits: FlexCredit[] = sale.flexCredits ?? (bonusFromShipping && promoted != null && promoted > 0 && sale.shipmentId
+        ? [{ id: `shipping:${sale.shipmentId}`, shipmentId: sale.shipmentId, cents: promoted }] : []);
+      if (bonusFromShipping && promoted != null && promoted > 0 && sale.shipmentId && sales.filter((other) => other.shipmentId === sale.shipmentId).length > 1 && note?.netCents === undefined) {
+        bonusUnresolved = true;
+        issues.push("Bonificación de envío compartido: completá el recibido total correspondiente a esta venta.");
+      }
+      if (bonusFromShipping && (promoted == null || (promoted > 0 && !sale.shipmentId)) && note?.netCents === undefined) {
+        bonusUnresolved = true;
+        issues.push("Falta el importe de la bonificación del envío para completar el ingreso.");
+      }
+      for (const credit of credits) {
         if (credit.shipmentId !== sale.shipmentId || (credit.orderId && credit.orderId !== sale.id) || usedCredits.has(credit.id)) continue;
         usedCredits.add(credit.id); bonus += credit.cents; bonusCount++;
         if (!credit.orderId && sales.filter((other) => other.shipmentId === sale.shipmentId).length > 1 && note?.netCents === undefined) {
@@ -79,7 +93,7 @@ export function profitRows(state: State, sales: Sale[]) {
     }
     const usable = sale.orderStatus === "paid" && !supplier.missing.length && received !== undefined && shipping !== undefined && !sale.review && !bonusUnresolved;
     if (sale.review) issues.push(sale.review);
-    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
+    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusFromShipping, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
   });
 }
 export function reportTotals(rows: ReturnType<typeof profitRows>, business: Business, from: string, to: string) {

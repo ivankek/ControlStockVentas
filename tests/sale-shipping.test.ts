@@ -18,6 +18,9 @@ test("costos finales: vendedor correcto, cero distinto de null y subsidios solo 
   assert.equal(cost.shippingGrossCents, 800000);
   assert.equal(cost.shippingPromotedCents, 450000);
   assert.equal(cost.buyerShippingCostCents, 0);
+  assert.equal(parseShippingCosts({ senders: [{ cost: 0 }] }, 42).shippingPromotedCents, null, "Descuentos ausentes no son un cero informado");
+  assert.equal(parseShippingCosts({ senders: [{ cost: 0, discounts: [] }] }, 42).shippingPromotedCents, 0);
+  assert.equal(parseShippingCosts({ senders: [{ cost: 0, discounts: [{ promoted_amount: 0 }] }] }, 42).shippingPromotedCents, 0);
   assert.equal(parseShippingCosts({ senders: [{ cost: 0 }] }, 42).sellerShippingCostCents, 0);
   assert.equal(parseShippingCosts({ senders: [{ user_id: 12, cost: 99 }] }, 42).sellerShippingCostCents, null);
   assert.equal(parseShippingCosts({}, 42).sellerShippingCostCents, null);

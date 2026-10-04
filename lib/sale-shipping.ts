@@ -16,8 +16,8 @@ export function parseShippingCosts(raw: Costs, seller: number) {
   const matching = senders.filter((s) => String(s.user_id) === String(seller));
   // An unlabelled singleton is permitted; an explicitly different seller is not.
   const sender = matching.length === 1 ? matching[0] : senders.length === 1 && senders[0].user_id == null ? senders[0] : undefined;
-  const discounts = sender && (sender.discounts == null || Array.isArray(sender.discounts))
-    ? (sender.discounts ?? []).filter((d) => d && typeof d === "object").map((d) => ({ ...(typeof d.type === "string" ? { type: d.type } : {}), ...(typeof d.rate === "number" && Number.isFinite(d.rate) ? { rate: d.rate } : {}), ...(cents(d.promoted_amount) !== null ? { promoted_amount: d.promoted_amount } : {}) })) : null;
+  const discounts = sender && Array.isArray(sender.discounts)
+    ? sender.discounts.filter((d) => d && typeof d === "object").map((d) => ({ ...(typeof d.type === "string" ? { type: d.type } : {}), ...(typeof d.rate === "number" && Number.isFinite(d.rate) ? { rate: d.rate } : {}), ...(cents(d.promoted_amount) !== null ? { promoted_amount: d.promoted_amount } : {}) })) : null;
   const promoted = discounts?.reduce((sum, d) => sum + (cents(d.promoted_amount) ?? 0), 0) ?? null;
   return { shippingGrossCents: cents(raw.gross_amount), buyerShippingCostCents: cents(raw.receiver?.cost), sellerShippingCostCents: cents(sender?.cost), shippingDiscounts: discounts, shippingPromotedCents: promoted !== null && Number.isSafeInteger(promoted) ? promoted : null };
 }

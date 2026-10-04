@@ -28,6 +28,28 @@ test("bonificación del ejemplo: 13.960 + 8.990 = 22.950, sin duplicar ni agrega
   assert.equal(profitRows(state(), [sale({ flexCredits: [credit, { ...credit, id: "902", cents: -899000 }] })])[0].received, 1396000);
   assert.equal(profitRows(state(), [sale({ receivedCents: 2295000, flexCredits: [credit, { ...credit, id: "902", cents: -899000 }] })])[0].net, undefined, "a reversal must reconcile even when the credit balance is zero");
 });
+
+test("subsidio como ingreso Flex: ejemplo 44.437,50 - 6.287,91 + 899 = 39.048,59", () => {
+  const shippingCosts: NonNullable<Sale["shippingCosts"]> = { isFlex: true, shippingLogisticType: "self_service", shippingGrossCents: 899000, buyerShippingCostCents: 0, sellerShippingCostCents: 809100, shippingPromotedCents: 89900, shippingDiscounts: [{ promoted_amount: 899 }] };
+  const input = sale({ grossCents: 4443750, receivedCents: 3814959, paymentBaseCents: 3814959, flexCredits: undefined, shippingCosts });
+  const row = profitRows(state(), [input])[0];
+  assert.equal(row.received, 3904859);
+  assert.equal(row.bonusAdded, 89900);
+  assert.equal(row.net, 3904859 - 1050000 - 420000);
+  assert.equal(profitRows(state(), [{ ...input, receivedCents: 3904859 }])[0].bonusAdded, 0);
+  assert.equal(profitRows(state(), [{ ...input, receivedCents: 3904859 }])[0].received, 3904859);
+  assert.equal(profitRows(state(), [{ ...input, mode: "correo" }])[0].received, 3814959);
+  assert.equal(profitRows(state(), [{ ...input, paymentBaseCents: undefined }])[0].net, undefined);
+  assert.equal(profitRows(state(), [{ ...input, shippingCosts: { ...shippingCosts, shippingPromotedCents: null } }])[0].net, undefined);
+  assert.equal(profitRows(state(), [{ ...input, shippingCosts: { ...shippingCosts, shippingPromotedCents: 0 } }])[0].received, 3814959);
+  const manual = state(); manual.business.notes[input.id] = { updatedAt: "", netCents: 3904859 };
+  assert.equal(profitRows(manual, [input])[0].received, 3904859);
+  assert.equal(profitRows(state(), [{ ...input, flexCredits: [{ ...credit, cents: 89900 }] }])[0].received, 3904859, "facturación y subsidy no se suman dos veces");
+  const shared = profitRows(state(), [input, { ...input, id: "101", paymentIds: ["501"] }]);
+  assert.equal(shared.reduce((sum, r) => sum + r.bonus, 0), 89900);
+  assert.equal(shared[0].net, undefined, "no asignar arbitrariamente ingreso compartido");
+  assert.equal(shared[1].net, undefined, "ninguna orden del envío compartido se da por conciliada sin verificar");
+});
 test("bonificaciones compartidas, neto manual y conciliaciones pendientes", () => {
   const rows = profitRows(state(), [sale(), sale({ id: "101", paymentIds: ["501"] })]);
   assert.equal(rows.reduce((n, r) => n + r.bonusAdded, 0), 899000);
