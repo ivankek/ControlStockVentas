@@ -11,11 +11,11 @@ export default function ShippingCosts({ sale }: { sale: Sale }) {
     <p>Bruto del envío: {amount(cost.shippingGrossCents)}</p>
     <p>A cargo del comprador: {amount(cost.buyerShippingCostCents)}</p>
     <p><strong>Costo final del vendedor: {amount(cost.sellerShippingCostCents)}</strong></p>
-    <p>Subsidio informado por Mercado Libre: {amount(cost.shippingPromotedCents)}{sale.mode === "flex" ? " · descuento sobre el costo del envío; puede diferir de la bonificación acreditada. Solo se usa como ingreso alternativo cuando no hay movimientos Flex, según la regla configurada." : " · informativo para Mercado Envíos correo."}</p>
+    <p>Subsidio informado por Mercado Libre: {amount(cost.shippingPromotedCents)}{sale.mode === "flex" ? " · informativo; la estimación Flex se calcula con la tabla de zonas configurada." : " · informativo para Mercado Envíos correo."}</p>
     {cost.shippingPromotedCents === 0 && <p>Este recurso no informa un importe de subsidio. Esto no confirma que no exista una acreditación Flex por separado.</p>}
     {cost.shippingDiscounts?.map((discount, index) => <p key={index}>{discount.type ?? "Descuento"}{discount.rate !== undefined ? ` · tasa informada: ${discount.rate}` : ""} · Importe: {discount.promoted_amount === undefined ? "No informado" : money(Math.round(discount.promoted_amount * 100))}</p>)}
     {cost.shippingError && <p role="status">{cost.shippingError}</p>}
     <p>El costo de Mercado Libre y el pago al transportista propio son conceptos distintos. Este costo no se vuelve a descontar del neto recibido de Mercado Pago.</p>
-    {sale.mode === "flex" && <p>El cálculo prioriza las bonificaciones y anulaciones de facturación Flex. El bruto del envío no se usa para deducir una bonificación faltante.</p>}
+    {sale.mode === "flex" && <p>La bonificación estimada se calcula según el destino y el bruto de la venta. Estos costos informados por la API no se agregan nuevamente.</p>}
   </details>;
 }

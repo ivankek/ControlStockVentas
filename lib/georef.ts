@@ -13,7 +13,7 @@ function classify(row: Location, dest: FlexDestination, method: FlexDetection["m
   const genericMatanza = same(dest.city, "La Matanza");
   const result = detectFlexZone({ province: row.provincia.nombre, municipality,
     city: row.localidad?.nombre ?? row.nombre ?? (genericMatanza ? dest.neighborhood : dest.city), neighborhood: dest.neighborhood });
-  return { ...result, method, reason: `Georef: ${municipality}${row.localidad?.nombre || row.nombre ? ` · ${row.localidad?.nombre ?? row.nombre}` : ""}. ${result.reason}` };
+  return { ...result, municipality, locality: row.localidad?.nombre ?? row.nombre, method, reason: `Georef: ${municipality}${row.localidad?.nombre || row.nombre ? ` · ${row.localidad?.nombre ?? row.nombre}` : ""}. ${result.reason}` };
 }
 
 // Request-scoped memoization: private addresses never enter a persistent cache.
@@ -46,7 +46,7 @@ export function createGeorefResolver(fetcher: typeof fetch = fetch) {
           const data = await query("ubicacion", { lat: String(dest.latitude), lon: String(dest.longitude) });
           if (same(data.ubicacion?.departamento?.nombre, "La Matanza")) {
             const sector = matanzaZoneFromCoordinates(dest.latitude, dest.longitude);
-            if (sector) return { zone: sector.zone, method: "georef-coordinates", reason: `Georef confirmó La Matanza · sector por coordenadas, referencia ${sector.locality}` };
+            if (sector) return { zone: sector.zone, municipality: "La Matanza", locality: sector.locality, method: "georef-coordinates", reason: `Georef confirmó La Matanza · sector por coordenadas, referencia ${sector.locality}` };
           }
           const resolved = classify(data.ubicacion ?? {}, dest, "georef-coordinates");
           if (resolved?.zone || (resolved && !same(data.ubicacion?.departamento?.nombre, "La Matanza"))) return resolved;

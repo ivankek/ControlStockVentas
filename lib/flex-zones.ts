@@ -67,7 +67,7 @@ export const FLEX_LOCALITIES: Record<string, string[]> = {
 // Postal codes alone may cover several localities. Only explicitly verified entries belong here.
 export const FLEX_POSTAL_LOCALITIES: Record<string, string> = { "1753": "Villa Luzuriaga" };
 export type FlexDestination = { province?: string; municipality?: string; city?: string; neighborhood?: string; postalCode?: string; latitude?: number; longitude?: number; georef?: FlexDetection };
-export type FlexDetection = { zone?: FlexSelection; method: "manual" | "province" | "municipality" | "locality" | "postal" | "unknown" | "georef-coordinates" | "georef-address" | "georef-locality"; reason: string };
+export type FlexDetection = { zone?: FlexSelection; municipality?: string; locality?: string; method: "manual" | "province" | "municipality" | "locality" | "postal" | "unknown" | "georef-coordinates" | "georef-address" | "georef-locality"; reason: string };
 const includes = (names: string[], value?: string) => !!value && names.some((name) => normalizePlace(name) === normalizePlace(value));
 // Mercado Libre sometimes appends a neighborhood to the locality, e.g. "Villa Tesei barrio Asunción".
 const localityIncludes = (names: string[], value?: string) => {

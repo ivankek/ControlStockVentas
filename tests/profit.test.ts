@@ -43,7 +43,7 @@ test("neto resta costo por unidades y logística propia una vez, sin volver a re
   assert.equal(rows[0].gross, 10000);
   assert.equal(rows[0].supplier, 4000);
   assert.equal(rows[0].shipping, 420000);
-  assert.equal(rows[0].net, -416000);
+  assert.equal(rows[0].net, 83000); // 8.000 + 499.000 - 4.000 - 420.000 cents
   assert.equal(rows[1].net, 4000);
   assert.equal(profitRows(s, [sale()])[0].net, 4000);
   assert.equal(profitRows(s, [sale({ mode: "flex" })])[0].shipping, undefined, "Flex sin localidad queda pendiente");

@@ -1,5 +1,6 @@
 import { localDate, type Order, type State } from "./domain";
 import { emptyBusiness, resolveFlex, resolveFlexShipments, type Business } from "./business";
+import { zoneBonus } from "./flex-bonus-zones";
 import { supplierReport } from "./supplier";
 import type { FlexCredit } from "./flex-credits";
 import type { SaleShipping } from "./sale-shipping";
@@ -34,6 +35,11 @@ export function profitRows(state: State, sales: Sale[]) {
   for (const sale of sales) for (const id of new Set(sale.paymentIds)) paymentCounts.set(id, (paymentCounts.get(id) ?? 0) + 1);
   const shipments = new Set<string>();
   const usedCredits = new Set<string>();
+  const bonusGroups = new Map<string, Sale[]>();
+  for (const sale of sales) if (sale.mode === "flex" && sale.orderStatus === "paid" && !sale.cancelled && sale.shippingStatus !== "cancelled") {
+    const key = sale.shipmentId ?? sale.id;
+    bonusGroups.set(key, [...(bonusGroups.get(key) ?? []), sale]);
+  }
   const flexByOrder = resolveFlexShipments(business, sales);
   return [...sales].sort((a, b) => a.id.localeCompare(b.id)).map((sale) => {
     const date = localDate(sale.createdAt);
@@ -43,32 +49,25 @@ export function profitRows(state: State, sales: Sale[]) {
     let received = note?.netCents ?? sale.receivedCents;
     if (note?.netCents === undefined && sale.paymentIds.some((id) => paymentCounts.get(id)! > 1)) { received = undefined; issues.push("Pago compartido: completar el neto correspondiente a esta orden"); }
     let bonus = 0, bonusAdded = 0, bonusCount = 0, bonusUnresolved = false;
-    const bonusFromShipping = sale.mode === "flex" && sale.flexCredits === undefined && sale.shippingCosts !== undefined;
-    if (sale.mode === "flex") {
-      // User-selected rule: treat the reported shipping subsidy as Flex income.
-      // Explicit billing movements take precedence; never combine both sources.
-      const promoted = sale.shippingCosts?.shippingPromotedCents;
-      const credits: FlexCredit[] = sale.flexCredits ?? (bonusFromShipping && promoted != null && promoted > 0 && sale.shipmentId
-        ? [{ id: `shipping:${sale.shipmentId}`, shipmentId: sale.shipmentId, cents: promoted }] : []);
-      if (bonusFromShipping && (promoted == null || (promoted > 0 && !sale.shipmentId)) && note?.netCents === undefined) {
-        bonusUnresolved = true;
-        issues.push("Falta el importe de la bonificación del envío para completar el ingreso.");
-      }
-      for (const credit of credits) {
-        if (credit.shipmentId !== sale.shipmentId || (credit.orderId && credit.orderId !== sale.id) || usedCredits.has(credit.id)) continue;
-        usedCredits.add(credit.id); bonus += credit.cents; bonusCount++;
-      }
-      if (note?.netCents === undefined) {
-        if (sale.flexCreditsUnavailable) { issues.push("No se encontró una bonificación Flex verificable; no se considera $0. Volvé a consultar o completá el recibido total."); bonusUnresolved = true; }
-        if (bonusCount > 0 && received !== undefined) {
-          if (!bonusFromShipping && bonus === 0 && sale.paymentBaseCents !== undefined && received !== sale.paymentBaseCents) {
-            bonusUnresolved = true;
-            issues.push("Bonificación anulada: el recibido no coincide con el desglose del pago. Revisá el recibido total.");
-          } else if (!bonusUnresolved) {
-            // Apply the user's rule even without a complete payment breakdown.
-            // Only omit the addition when that breakdown proves it is included.
-            if (sale.paymentBaseCents === undefined || received !== sale.paymentBaseCents + bonus) { bonusAdded = bonus; received += bonus; }
-          }
+    let bonusEstimate: ReturnType<typeof zoneBonus> | undefined;
+    let bonusElsewhere = false;
+    if (sale.mode === "flex" && sale.orderStatus === "paid" && !sale.cancelled && sale.shippingStatus !== "cancelled") {
+      const key = sale.shipmentId ?? sale.id;
+      const group = bonusGroups.get(key)!;
+      const gross = group.every((item) => item.grossCents !== undefined) ? group.reduce((sum, item) => sum + item.grossCents!, 0) : undefined;
+      const estimates = group.map((item) => zoneBonus(item, gross, flexByOrder[item.id]?.zone));
+      const known = estimates.filter((item) => item.cents !== undefined);
+      bonusEstimate = known[0] ?? estimates[0];
+      if (new Set(known.map((item) => item.zone)).size > 1) bonusEstimate = { cents: undefined, reduced: false, reason: "Destinos contradictorios entre órdenes del envío" };
+      bonusElsewhere = usedCredits.has(key);
+      if (bonusEstimate.cents === undefined) {
+        if (note?.netCents === undefined) { bonusUnresolved = true; issues.push(bonusEstimate.reason); }
+      } else if (!bonusElsewhere) {
+        usedCredits.add(key); bonus = bonusEstimate.cents; bonusCount = 1;
+        // Manual received totals already include all income. Otherwise add the
+        // owner's zone estimate unless the payment breakdown includes it.
+        if (note?.netCents === undefined && received !== undefined && (sale.paymentBaseCents === undefined || received !== sale.paymentBaseCents + bonus)) {
+          bonusAdded = bonus; received += bonus;
         }
       }
     }
@@ -89,7 +88,7 @@ export function profitRows(state: State, sales: Sale[]) {
     }
     const usable = sale.orderStatus === "paid" && !supplier.missing.length && received !== undefined && shipping !== undefined && !sale.review && !bonusUnresolved;
     if (sale.review) issues.push(sale.review);
-    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusFromShipping, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
+    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusEstimate, bonusElsewhere, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
   });
 }
 export function reportTotals(rows: ReturnType<typeof profitRows>, business: Business, from: string, to: string) {
