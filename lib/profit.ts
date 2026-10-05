@@ -3,7 +3,7 @@ import { emptyBusiness, resolveFlex, resolveFlexShipments, type Business } from 
 import { supplierReport } from "./supplier";
 import type { FlexCredit } from "./flex-credits";
 import type { SaleShipping } from "./sale-shipping";
-export type Sale = Order & { shippingCosts?: SaleShipping; flexReconciliation?: "deferred"; grossCents?: number; receivedCents?: number; paymentBaseCents?: number; flexCredits?: FlexCredit[]; flexCreditsUnavailable?: boolean; paymentIds: string[]; issues: string[] };
+export type Sale = Order & { shippingCosts?: SaleShipping; flexReconciliation?: "deferred" | "queried" | "partial"; grossCents?: number; receivedCents?: number; paymentBaseCents?: number; flexCredits?: FlexCredit[]; flexCreditsUnavailable?: boolean; paymentIds: string[]; issues: string[] };
 export function monthlyExpenses(business: Business, from: string, to: string) {
   let tax = 0, billing = 0;
   for (let day = from; day <= to; day = new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10)) {
@@ -57,22 +57,17 @@ export function profitRows(state: State, sales: Sale[]) {
       for (const credit of credits) {
         if (credit.shipmentId !== sale.shipmentId || (credit.orderId && credit.orderId !== sale.id) || usedCredits.has(credit.id)) continue;
         usedCredits.add(credit.id); bonus += credit.cents; bonusCount++;
-        if (!bonusFromShipping && !credit.orderId && sales.filter((other) => other.shipmentId === sale.shipmentId).length > 1 && note?.netCents === undefined) {
-          bonusUnresolved = true;
-          issues.push("Bonificación de envío compartido sin orden identificada: completá el recibido total de cada venta.");
-        }
       }
       if (note?.netCents === undefined) {
-        if (sale.flexCreditsUnavailable) { issues.push("No se pudieron verificar las bonificaciones Flex; volvé a consultar o completá el recibido total."); bonusUnresolved = true; }
+        if (sale.flexCreditsUnavailable) { issues.push("No se encontró una bonificación Flex verificable; no se considera $0. Volvé a consultar o completá el recibido total."); bonusUnresolved = true; }
         if (bonusCount > 0 && received !== undefined) {
-          if (bonusFromShipping && !bonusUnresolved) {
+          if (!bonusFromShipping && bonus === 0 && sale.paymentBaseCents !== undefined && received !== sale.paymentBaseCents) {
+            bonusUnresolved = true;
+            issues.push("Bonificación anulada: el recibido no coincide con el desglose del pago. Revisá el recibido total.");
+          } else if (!bonusUnresolved) {
             // Apply the user's rule even without a complete payment breakdown.
             // Only omit the addition when that breakdown proves it is included.
             if (sale.paymentBaseCents === undefined || received !== sale.paymentBaseCents + bonus) { bonusAdded = bonus; received += bonus; }
-          }
-          else if (!bonusUnresolved && sale.paymentBaseCents !== undefined && received === sale.paymentBaseCents) { bonusAdded = bonus; received += bonus; }
-          else if (sale.paymentBaseCents === undefined || received !== sale.paymentBaseCents + bonus) {
-            issues.push("Bonificación Flex informada: falta conciliar si ya está incluida en el recibido. Completá el recibido total."); bonusUnresolved = true;
           }
         }
       }

@@ -1,6 +1,7 @@
 import { get } from "./meli";
 
 export type FlexCredit = { id: string; shipmentId: string; orderId?: string; cents: number };
+export type FlexCreditReport = { credits: FlexCredit[]; warnings: string[] };
 type Detail = { charge_info?: { detail_id?: number | string; detail_amount?: number; detail_type?: string; concept_type?: string }; shipping_info?: { shipping_id?: number | string; order?: { order_id?: number | string } }; currency_info?: { currency_id?: string } };
 type Page<T> = { results: T[]; total: number; last_id?: string | number; errors?: unknown[] };
 const id = (value: unknown) => typeof value === "string" && /^\d+$/.test(value) ? value : typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? String(value) : undefined;
@@ -26,39 +27,56 @@ async function billingPage<T>(path: string, token: string, context: string): Pro
 }
 // Billing cycles depend on the seller. Query their actual keys, including later
 // periods where a credit or reversal for an earlier sale may have been posted.
-export async function flexCredits(token: string, from: string): Promise<FlexCredit[]> {
+export async function flexCreditReport(token: string, from: string): Promise<FlexCreditReport> {
   const credits = new Map<string, FlexCredit>();
+  const warnings: string[] = [];
+  const conflicting = new Set<string>();
   for (const document of ["BILL", "CREDIT_NOTE"]) {
     const periods: { key: string; period: { date_to: string } }[] = [];
-    for (let offset = 0; ; offset += 12) {
-      if (offset >= 120) throw Error("Demasiados períodos de facturación");
-      const page = await billingPage<typeof periods[number]>(`/billing/integration/monthly/periods?group=ML&document_type=${document}&offset=${offset}&limit=12`, token, `Períodos de facturación ${document}`);
-      periods.push(...page.results.filter((p) => p.period?.date_to >= from));
-      if (offset + page.results.length >= page.total) break;
-      if (!page.results.length) throw Error("La consulta de períodos no avanzó");
-    }
-    for (const period of periods) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(period.key)) throw Error("Período de facturación inválido");
-      let cursor = "0", read = 0;
-      for (let pages = 0; ; pages++) {
-        if (pages >= 100) throw Error("Demasiadas bonificaciones en un período");
-        const page = await billingPage<Detail>(`/billing/integration/periods/key/${period.key}/group/ML/flex/details?document_type=${document}&limit=1000&from_id=${encodeURIComponent(cursor)}&sort_by=ID&order_by=ASC`, token, `Bonificaciones Flex ${document}, período ${period.key}`);
-        for (const detail of page.results) {
-          const credit = parseFlexCredit(detail);
-          if (!credit) continue;
-          const prior = credits.get(credit.id);
-          if (prior && JSON.stringify(prior) !== JSON.stringify(credit)) throw Error("Bonificación repetida con datos diferentes");
-          credits.set(credit.id, credit);
-        }
-        read += page.results.length;
-        if (read >= page.total) break;
-        const next = id(page.last_id) ?? id(page.results.at(-1)?.charge_info?.detail_id);
-        if (!page.results.length || !next || BigInt(next) <= BigInt(cursor)) throw Error("La consulta de bonificaciones no avanzó");
-        cursor = next;
+    try {
+      for (let offset = 0; ; offset += 12) {
+        if (offset >= 120) throw Error("Demasiados períodos de facturación");
+        const page = await billingPage<typeof periods[number]>(`/billing/integration/monthly/periods?group=ML&document_type=${document}&offset=${offset}&limit=12`, token, `Períodos de facturación ${document}`);
+        periods.push(...page.results.filter((p) => p.period?.date_to >= from));
+        if (offset + page.results.length >= page.total) break;
+        if (!page.results.length) throw Error("La consulta de períodos no avanzó");
       }
+    } catch (error) { warnings.push(`${document}: ${error instanceof Error ? error.message : "No se pudieron consultar los períodos"}`); }
+    // Keep periods already read even if a later page fails. A failure in one
+    // document/period must not discard valid movements from the others.
+    for (const period of periods) {
+      try {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(period.key)) throw Error("Período de facturación inválido");
+        let cursor = "0", read = 0;
+        for (let pages = 0; ; pages++) {
+          if (pages >= 100) throw Error("Demasiadas bonificaciones en un período");
+          const page = await billingPage<Detail>(`/billing/integration/periods/key/${period.key}/group/ML/flex/details?document_type=${document}&limit=1000&from_id=${encodeURIComponent(cursor)}&sort_by=ID&order_by=ASC`, token, `Bonificaciones Flex ${document}, período ${period.key}`);
+          for (const detail of page.results) {
+            const credit = parseFlexCredit(detail);
+            if (!credit) continue;
+            const prior = credits.get(credit.id);
+            if (prior && JSON.stringify(prior) !== JSON.stringify(credit)) {
+              credits.delete(credit.id); conflicting.add(credit.id);
+              warnings.push(`Movimiento Flex ${credit.id}: datos contradictorios; no se incluye.`);
+            }
+            if (conflicting.has(credit.id)) continue;
+            credits.set(credit.id, credit);
+          }
+          read += page.results.length;
+          if (read >= page.total) break;
+          const next = id(page.last_id) ?? id(page.results.at(-1)?.charge_info?.detail_id);
+          if (!page.results.length || !next || BigInt(next) <= BigInt(cursor)) throw Error("La consulta de bonificaciones no avanzó");
+          cursor = next;
+        }
+      } catch (error) { warnings.push(`${document}, ${period.key}: ${error instanceof Error ? error.message : "No se pudieron consultar los movimientos"}`); }
     }
   }
-  return [...credits.values()];
+  return { credits: [...credits.values()], warnings };
+}
+export async function flexCredits(token: string, from: string): Promise<FlexCredit[]> {
+  const report = await flexCreditReport(token, from);
+  if (report.warnings.length) throw Error(report.warnings.join(" · "));
+  return report.credits;
 }
 
 // Compare the payment net with its item amount minus item fees/taxes. Only

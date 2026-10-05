@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { flexCredits, parseFlexCredit, paymentBase } from "../lib/flex-credits";
+import { flexCredits, flexCreditReport, parseFlexCredit, paymentBase } from "../lib/flex-credits";
+import { applyFlexCredits } from "../lib/profit-bonuses";
 import { emptyState } from "../lib/domain";
 import { emptyBusiness } from "../lib/business";
-import { profitRows, type Sale } from "../lib/profit";
+import { profitRows, reportTotals, type Sale } from "../lib/profit";
 import { detectFlexZone } from "../lib/flex-zones";
 
 const credit = { id: "900", shipmentId: "1000", orderId: "100", cents: 899000 };
@@ -55,9 +56,9 @@ test("subsidio como ingreso Flex: ejemplo 44.437,50 - 6.287,91 + 899 = 39.048,59
 test("bonificaciones compartidas, neto manual y conciliaciones pendientes", () => {
   const rows = profitRows(state(), [sale(), sale({ id: "101", paymentIds: ["501"] })]);
   assert.equal(rows.reduce((n, r) => n + r.bonusAdded, 0), 899000);
-  assert.equal(profitRows(state(), [sale({ paymentBaseCents: undefined })])[0].net, undefined);
+  assert.equal(profitRows(state(), [sale({ paymentBaseCents: undefined })])[0].net, 825000);
   assert.equal(profitRows(state(), [sale({ flexCreditsUnavailable: true })])[0].net, undefined);
-  assert.equal(profitRows(state(), [sale({ receivedCents: 1500000 })])[0].net, undefined);
+  assert.equal(profitRows(state(), [sale({ receivedCents: 1500000 })])[0].received, 2399000);
   const manual = state(); manual.business.notes["100"] = { updatedAt: "", netCents: 2295000 };
   const row = profitRows(manual, [sale({ flexCreditsUnavailable: true })])[0];
   assert.equal(row.received, 2295000); assert.equal(row.net, 825000);
@@ -89,4 +90,40 @@ test("facturación usa períodos reales, pagina detalles y deduplica documentos"
   assert.equal(requests, 6);
   assert.equal(result.length, 2);
   assert.equal(result.reduce((n, c) => n + c.cents, 0), 800000);
+});
+
+test("venta real: descuento cero no impide sumar 6.990 de facturación al recibido y al total", () => {
+  const input = sale({ id: "2000018752881314", packId: "2000015311669733", shipmentId: "48152859836", paymentIds: ["181957446714"], createdAt: "2026-10-02T06:05:20.000-04:00", grossCents: 1940000, receivedCents: 1375000, paymentBaseCents: 1940000, flexCredits: undefined, flexReconciliation: "deferred", shippingCosts: { isFlex: true, shippingLogisticType: "self_service", shippingGrossCents: 699000, buyerShippingCostCents: 0, sellerShippingCostCents: 0, shippingDiscounts: [], shippingPromotedCents: 0 } });
+  const movement = { id: "9900", shipmentId: input.shipmentId!, orderId: input.id, cents: 699000 };
+  const enriched = applyFlexCredits([input], { credits: [movement], warnings: [] });
+  const rows = profitRows(state(), enriched);
+  assert.equal(rows[0].received, 2074000);
+  assert.equal(rows[0].bonusAdded, 699000);
+  assert.equal(rows[0].net, 2074000 - 1050000 - rows[0].shipping!);
+  assert.equal(reportTotals(rows, emptyBusiness(), "2026-10-01", "2026-10-04").net, rows[0].net);
+  for (const warnings of [[], ["Facturación BILL: 403"]]) {
+    const unknown = profitRows(state(), applyFlexCredits([input], { credits: [], warnings }))[0];
+    assert.equal(unknown.bonusAdded, 0, "no se inventa una bonificación a partir del bruto del envío");
+    assert.equal(unknown.net, undefined, "un descuento cero no confirma un ingreso cero");
+  }
+  const positive = { ...input, shippingCosts: { ...input.shippingCosts!, shippingPromotedCents: 49900 } };
+  assert.equal(profitRows(state(), applyFlexCredits([positive], { credits: [movement], warnings: [] }))[0].bonusAdded, 699000, "no combina ambas fuentes");
+  assert.equal(profitRows(state(), applyFlexCredits([positive], { credits: [], warnings: ["403"] }))[0].bonusAdded, 49900, "conserva la regla solicitada para importes conocidos");
+  const shared = applyFlexCredits([positive, { ...positive, id: "2000018752881315", paymentIds: ["another"] }], { credits: [movement], warnings: [] });
+  assert.equal(profitRows(state(), shared).reduce((sum, row) => sum + row.bonusAdded, 0), 699000, "no usa el subsidio como segunda bonificación de un envío compartido");
+});
+
+test("facturación parcial conserva movimientos y detalla el recurso fallido", async (t) => {
+  t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    if (url.searchParams.get("document_type") === "CREDIT_NOTE") return Response.json({}, { status: 403 });
+    if (url.pathname.endsWith("monthly/periods")) return Response.json({ total: 2, results: [{ key: "2026-09-01", period: { date_to: "2026-09-30" } }, { key: "2026-10-01", period: { date_to: "2026-10-31" } }] });
+    if (url.pathname.includes("2026-09-01")) return Response.json({}, { status: 400 });
+    return Response.json({ total: 1, results: [{ charge_info: { concept_type: "FLEX", detail_id: 900, detail_type: "BONUS", detail_amount: 8990 }, shipping_info: { shipping_id: 1000, order: { order_id: 100 } } }] });
+  });
+  const report = await flexCreditReport("seller-token", "2026-09-01");
+  assert.deepEqual(report.credits, [credit]);
+  assert.equal(report.warnings.length, 2);
+  assert.match(report.warnings.join(" "), /2026-09-01.*400/);
+  assert.match(report.warnings.join(" "), /CREDIT_NOTE.*403/);
 });
