@@ -4,6 +4,7 @@ import { zoneBonus } from "../lib/flex-bonus-zones";
 import { profitRows, reportTotals, type Sale } from "../lib/profit";
 import { emptyState } from "../lib/domain";
 import { emptyBusiness } from "../lib/business";
+import { detectFlexZone } from "../lib/flex-zones";
 
 const sale = (more: Partial<Sale> = {}): Sale => ({ id: "100", createdAt: "2026-10-02T12:00:00Z", orderStatus: "paid", cancelled: false, mode: "flex", province: "Buenos Aires", city: "Hurlingham", shipmentId: "1000", lines: [{ productId: "MLA1:0", quantity: 1 }], grossCents: 4000000, receivedCents: 3000000, paymentBaseCents: 3000000, paymentIds: ["500"], issues: [], ...more });
 const state = () => ({ ...emptyState(), business: emptyBusiness(), supplierProducts: [{ id: "p", name: "Producto", costs: [{ from: "2026-09-01", cents: 1050000 }] }], supplierLinks: { "MLA1:0": { supplierId: "p", units: 1 } } });
@@ -58,4 +59,44 @@ test("envío compartido: usa bruto conjunto y suma una vez; respeta recibido man
   assert.equal(profitRows(manual, [sale()])[0].received, 3100000);
   assert.equal(profitRows(state(), [sale({ receivedCents: undefined })])[0].net, undefined);
   assert.equal(profitRows(state(), [sale({ city: "Desconocido" })])[0].net, undefined);
+});
+
+test("localidades de las capturas resuelven logística y bonificación sin georef", () => {
+  for (const [city, cordon, bonus] of [
+    ["Manzanares", "CORDON_2", 89900], ["Billinghurst", "CORDON_1", 69900],
+    ["Melchor Romero", "CORDON_3", 89900], ["Platanos", "CORDON_2", 89900],
+    ["Tristán Suárez", "CORDON_2", 89900], ["Los Polvorines", "CORDON_2", 89900],
+    ["Villa Sarmiento", "CORDON_2", 49900],
+  ] as const) {
+    const destination = { province: "Buenos Aires", city };
+    assert.equal(detectFlexZone(destination).zone, cordon, city);
+    const row = profitRows(state(), [sale(destination)])[0];
+    assert.equal(row.bonusAdded, bonus, city);
+    assert.notEqual(row.net, undefined, city);
+    assert.equal(detectFlexZone({ ...destination, province: "Córdoba" }).zone, undefined);
+  }
+});
+
+test("elegir zona manual completa bonificación faltante y recalcula neto; se comparte por envío", () => {
+  for (const [zone, bonus] of [["CORDON_1", 499000], ["CORDON_2", 699000], ["CORDON_3", 899000], ["CABA", 699000]] as const) {
+    const s = state();
+    const input = sale({ city: "Sin identificar", grossCents: 2000000 });
+    assert.equal(profitRows(s, [input])[0].net, undefined);
+    s.business.notes[input.id] = { flexZone: zone, updatedAt: "" };
+    const row = profitRows(s, [input])[0];
+    assert.equal(row.bonusAdded, bonus);
+    assert.equal(row.net, row.received! - row.supplier! - row.shipping!);
+    assert.equal(profitRows(s, [{ ...input, grossCents: 3300000 }])[0].bonusAdded, bonus / 10);
+    assert.equal(profitRows(s, [{ ...input, mode: "correo" }])[0].bonusAdded, 0);
+    const shared = profitRows(s, [input, { ...input, id: "101", paymentIds: ["501"] }]);
+    assert.equal(shared.reduce((sum, r) => sum + r.bonusAdded, 0), bonus / 10);
+    delete s.business.notes[input.id];
+    assert.equal(profitRows(s, [input])[0].net, undefined);
+  }
+  const s = state(); s.business.notes["100"] = { flexZone: "CORDON_3", updatedAt: "" };
+  assert.equal(profitRows(s, [sale({ city: "Hurlingham" })])[0].bonusAdded, 49900, "conserva bonificación conocida por destino");
+  s.business.notes["100"].flexZone = "CORDON_2";
+  assert.equal(profitRows(s, [sale({ city: "La Matanza" })])[0].bonusAdded, 89900, "conserva regla especial de La Matanza Sur");
+  s.business.notes["100"].flexZone = "NONE";
+  assert.equal(profitRows(s, [sale({ city: "Sin identificar" })])[0].bonusUnresolved, true, "Sin Flex no elige una tarifa");
 });

@@ -55,7 +55,7 @@ export function profitRows(state: State, sales: Sale[]) {
       const key = sale.shipmentId ?? sale.id;
       const group = bonusGroups.get(key)!;
       const gross = group.every((item) => item.grossCents !== undefined) ? group.reduce((sum, item) => sum + item.grossCents!, 0) : undefined;
-      const estimates = group.map((item) => zoneBonus(item, gross, flexByOrder[item.id]?.zone));
+      const estimates = group.map((item) => zoneBonus(item, gross, flexByOrder[item.id]?.zone, flexByOrder[item.id]?.method === "manual"));
       const known = estimates.filter((item) => item.cents !== undefined);
       bonusEstimate = known[0] ?? estimates[0];
       if (new Set(known.map((item) => item.zone)).size > 1) bonusEstimate = { cents: undefined, reduced: false, reason: "Destinos contradictorios entre órdenes del envío" };

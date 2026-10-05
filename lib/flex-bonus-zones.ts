@@ -51,8 +51,14 @@ export function bonusZone(destination: FlexDestination, logisticsZone?: FlexSele
   const zones = new Set(matches.map((entry) => entry.zone));
   return zones.size === 1 ? { zone: matches[0].zone, reason: matches[0].place! } : { reason: zones.size ? "Destino contradictorio para la bonificación" : "Destino sin zona de bonificación reconocida" };
 }
-export function zoneBonus(destination: FlexDestination, grossCents?: number, logisticsZone?: FlexSelection) {
-  const detection = bonusZone(destination, logisticsZone);
+export function zoneBonus(destination: FlexDestination, grossCents?: number, logisticsZone?: FlexSelection, manualLogistics = false) {
+  let detection = bonusZone(destination, logisticsZone);
+  // Only fill missing bonuses. Keep the destination table (and La Matanza's
+  // existing north/south rule) when it already identifies the bonus.
+  if (!detection.zone && manualLogistics && logisticsZone && logisticsZone !== "NONE") {
+    const manualZones: Record<Exclude<FlexSelection, "NONE">, BonusZone> = { CABA: "media", CORDON_1: "cercana", CORDON_2: "media", CORDON_3: "lejana" };
+    detection = { zone: manualZones[logisticsZone], reason: "Bonificación completada con la zona Flex seleccionada manualmente" };
+  }
   if (!detection.zone) return { ...detection, cents: undefined, reduced: false };
   if (grossCents === undefined || !Number.isSafeInteger(grossCents) || grossCents < 0) return { ...detection, cents: undefined, reduced: false, reason: "Falta el bruto para calcular la bonificación" };
   const reduced = grossCents >= 3300000;
