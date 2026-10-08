@@ -1,0 +1,30 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import ExcelJS from "exceljs";
+import { profitExcel } from "../lib/profit-excel";
+import { emptyState } from "../lib/domain";
+import { profitRows, type Sale } from "../lib/profit";
+
+test("Excel respeta filas y orden, conserva IDs y textos, y promedia importes numéricos", async () => {
+  const state = emptyState();
+  state.supplierProducts = [{ id: "p", name: "=PRODUCTO()", costs: [] }];
+  state.supplierLinks = { "MLA1:0": { supplierId: "p", units: 2 } };
+  const sale: Sale = { id: "2000018868842282", mode: "correo", orderStatus: "paid", cancelled: false, createdAt: "2026-10-08T12:00:00Z", grossCents: 2000, receivedCents: 1900, paymentIds: ["1"], issues: [], lines: [{ productId: "MLA1:0", quantity: 1 }] };
+  const source = profitRows(state, [sale, { ...sale, id: "2000018868842283", paymentIds: ["2"] }, { ...sale, id: "2000018868842284", paymentIds: ["3"] }]);
+  const selected = [{ ...source[1], net: 1400 }, { ...source[0], net: 1600 }];
+  const book = new ExcelJS.Workbook();
+  await book.xlsx.load(await profitExcel(selected, state) as never);
+  const sheet = book.worksheets[0];
+  assert.equal(sheet.getCell("B2").value, selected[0].sale.id);
+  assert.equal(sheet.getCell("B3").value, selected[1].sale.id);
+  assert.equal(sheet.getCell("D2").value, "=PRODUCTO() × 2");
+  assert.equal(sheet.getCell("N2").type, ExcelJS.ValueType.String);
+  assert.equal(sheet.getCell("M2").value, 14);
+  assert.equal(sheet.getCell("M3").value, 16);
+  assert.deepEqual(sheet.getCell("M4").value, { formula: 'IFERROR(AVERAGE(M2:M3),"")', result: 15 });
+  assert.equal(sheet.getCell("K4").value, "Sin datos");
+  assert.equal(sheet.getCell("B4").value, null, "no exporta la venta excluida");
+  const mixed = new ExcelJS.Workbook();
+  await mixed.xlsx.load(await profitExcel([...selected, { ...source[2], net: undefined }, { ...source[2], net: 0 }], state) as never);
+  assert.equal(mixed.worksheets[0].getCell("M6").result, 10, "incluye cero y excluye pendiente");
+});

@@ -27,6 +27,7 @@ export default function Profits({ token }: { token?: string }) {
   const [date, setDate] = useViewState("app/profits.tsx:date", today);
   const [net, setNet] = useViewState("app/profits.tsx:net", false);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [detailFilter, setDetailFilter] = useViewState<"all" | "pending" | "calculable">("app/profits.tsx:detailFilter", "all");
@@ -89,6 +90,21 @@ export default function Profits({ token }: { token?: string }) {
       return amount(b.net) - amount(a.net);
     });
   }, [rows, result, detailFilter, detailSearch, detailSort]);
+  async function downloadExcel() {
+    if (!result || !visibleRows.length || exporting) return;
+    setExporting(true); setError("");
+    try {
+      const { profitExcel } = await import("@/lib/profit-excel");
+      const bytes = await profitExcel(visibleRows, result.state);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "detalle-ventas-" + result.from + "-" + result.to + ".xlsx";
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch { setError("No se pudo generar el Excel. Volvé a intentar."); }
+    finally { setExporting(false); }
+  }
   const business = result?.state.business ?? emptyBusiness();
   const totals = result ? reportTotals(rows, business, result.from, result.to) : undefined;
   const buckets = useMemo(() => {
@@ -126,7 +142,7 @@ export default function Profits({ token }: { token?: string }) {
       <section className="panel profit-chart"><h2>{net ? "Evolución del neto estimado" : "Evolución de ventas brutas"}{incomplete ? " · parcial" : ""}</h2>
         {buckets.map((bucket) => { const value = net ? bucket.net : bucket.gross; return <div className="profit-bar-row" key={bucket.label}><span>{bucket.label}</span><div className="profit-bar-track"><div className={value < 0 ? "profit-bar negative" : "profit-bar"} style={{ width: `${Math.max(0, Math.abs(value) / max * 100)}%` }} /></div><strong>{money(value)}</strong></div>; })}
       </section>
-      <p className="table-note">Bonificación ML es una estimación calculada con la tabla de zonas configurada, únicamente para Flex. Se suma una vez por envío y forma parte de la ganancia neta estimada. En envíos compartidos se usa el bruto total de sus órdenes consultadas y se asigna a la primera orden por ID.</p><section className="panel pending"><div className="panel-title"><h2>Detalle por venta</h2><span className="pill">{visibleRows.length} de {rows.length}</span></div>
+      <p className="table-note">Bonificación ML es una estimación calculada con la tabla de zonas configurada, únicamente para Flex. Se suma una vez por envío y forma parte de la ganancia neta estimada. En envíos compartidos se usa el bruto total de sus órdenes consultadas y se asigna a la primera orden por ID.</p><section className="panel pending"><div className="panel-title"><h2>Detalle por venta</h2><button disabled={exporting || busy || !visibleRows.length} onClick={() => void downloadExcel()}>{exporting ? "Generando Excel…" : "Descargar Excel"}</button><span className="pill">{visibleRows.length} de {rows.length}</span></div>
         <div className="profit-grid-controls"><label>Buscar<input value={detailSearch} onChange={(event) => setDetailSearch(event.target.value)} placeholder="Orden, producto o destino" /></label><label>Ver<select value={detailFilter} onChange={(event) => setDetailFilter(event.target.value as typeof detailFilter)}><option value="all">Todas</option><option value="pending">Pendientes de cálculo</option><option value="calculable">Con neto calculable</option></select></label><label>Ordenar<select value={detailSort} onChange={(event) => setDetailSort(event.target.value)}><option value="pending">Pendientes primero</option><option value="date-desc">Fecha: más reciente</option><option value="date-asc">Fecha: más antigua</option><option value="gross-desc">Bruto: mayor importe</option><option value="received-desc">Recibido: mayor importe</option><option value="provider-desc">Proveedor: mayor importe</option><option value="net-desc">Neto: mayor importe</option></select></label></div>
         <div className="table-wrap profit-table-wrap"><table className="profit-table"><thead><tr><th>FECHA</th><th>ORDEN / PRODUCTO</th><th>DESTINO</th><th>ENVÍO</th><th>BRUTO</th><th>RECIBIDO</th><th>PROVEEDOR</th><th title="Estimación por zona, únicamente para Flex.">BONIFICACIÓN ML</th><th>LOGÍSTICA</th><th>NETO</th><th>ESTADO</th></tr></thead><tbody>{visibleRows.map((row) => {
           const product = row.sale.lines.map((line) => { const listing = result.state.listings?.find((item) => item.id === line.productId.split(":")[0]); return `${listing?.title ?? line.productId} × ${line.quantity}`; }).join(" · ");
