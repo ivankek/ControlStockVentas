@@ -79,20 +79,45 @@ export async function flexCredits(token: string, from: string): Promise<FlexCred
   return report.credits;
 }
 
-// Compare the payment net with its item amount minus item fees/taxes. Only
-// reconcile credits when this complete breakdown explains the net exactly.
-export function paymentBase(data: { transaction_amount?: number; taxes_amount?: number; fee_details?: { amount?: number; fee_payer?: string; type?: string }[] }) {
-  if (typeof data.transaction_amount !== "number" || !Array.isArray(data.fee_details) || typeof data.taxes_amount !== "number") return undefined;
-  let cents = Math.round(data.transaction_amount * 100);
-  let taxesInFees = false;
+export type PaymentFees = { transaction_amount?: number; taxes_amount?: number; fee_details?: { amount?: number; fee_payer?: string; type?: string }[] };
+const moneyCents = (amount: unknown) => typeof amount === "number" && Number.isFinite(amount) && amount >= 0 && Number.isSafeInteger(Math.round(amount * 100)) ? Math.round(amount * 100) : undefined;
+
+// ML may omit marketplace fees from MP's fee_details. Prefer the fee attached
+// to this payment; use per-unit order fees only for a single-payment order.
+export function orderPaymentFee(order: { payments?: { id: number; status: string; marketplace_fee?: number | null }[]; order_items: { quantity: number; sale_fee?: number }[] }, paymentId: number) {
+  const approved = order.payments?.filter((p) => p.status === "approved") ?? [];
+  const payment = approved.find((p) => p.id === paymentId);
+  const explicit = moneyCents(payment?.marketplace_fee);
+  if (explicit !== undefined) return explicit;
+  if (approved.length !== 1 || !payment || !order.order_items.length) return undefined;
+  let total = 0;
+  for (const item of order.order_items) {
+    const fee = moneyCents(item.sale_fee);
+    if (fee === undefined || !Number.isSafeInteger(item.quantity) || item.quantity <= 0) return undefined;
+    total += fee * item.quantity;
+  }
+  return Number.isSafeInteger(total) ? total : undefined;
+}
+
+// An empty fee list is not evidence of a commission-free sale. Never treat
+// gross as item net just because MP omitted ML's marketplace commission.
+export function paymentBase(data: PaymentFees, marketplaceFeeCents?: number) {
+  const amount = moneyCents(data.transaction_amount), taxes = moneyCents(data.taxes_amount);
+  if (amount === undefined || taxes === undefined || !Array.isArray(data.fee_details)) return undefined;
+  let cents = amount, taxesInFees = false, marketplaceInFees = false;
   for (const fee of data.fee_details) {
     if (fee.fee_payer === "payer") continue;
-    if (fee.fee_payer !== "collector" || typeof fee.amount !== "number" || fee.amount < 0 || !fee.type) return undefined;
-    // Shipping charges make the item-only baseline ambiguous.
+    const charge = moneyCents(fee.amount);
+    if (fee.fee_payer !== "collector" || charge === undefined || !fee.type) return undefined;
     if (/shipping|envio|flex/i.test(fee.type)) return undefined;
     taxesInFees ||= /tax|impuesto|retenc/i.test(fee.type);
-    cents -= Math.round(fee.amount * 100);
+    marketplaceInFees ||= fee.type === "marketplace_fee";
+    cents -= charge;
   }
-  if (!taxesInFees) cents -= Math.round(data.taxes_amount * 100);
+  if (!marketplaceInFees) {
+    if (marketplaceFeeCents === undefined || !Number.isSafeInteger(marketplaceFeeCents) || marketplaceFeeCents < 0) return undefined;
+    cents -= marketplaceFeeCents;
+  }
+  if (!taxesInFees) cents -= taxes;
   return Number.isSafeInteger(cents) && cents >= 0 ? cents : undefined;
 }

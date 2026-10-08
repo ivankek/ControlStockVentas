@@ -40,7 +40,7 @@ test("suma el estimado Flex al recibido, neto y total sin usar descuentos ni fac
   assert.equal(rows[0].net, 3049900 - 1050000 - rows[0].shipping!);
   assert.equal(reportTotals(rows, emptyBusiness(), "2026-10-01", "2026-10-05").net, rows[0].net);
   assert.equal(rows[0].bonusUnresolved, false);
-  const caba = profitRows(state(), [sale({ province: "Capital Federal", city: "San Nicolás", grossCents: 1940000, receivedCents: 1375000, paymentBaseCents: 1940000 })])[0];
+  const caba = profitRows(state(), [sale({ province: "Capital Federal", city: "San Nicolás", grossCents: 1940000, receivedCents: 1375000, paymentBaseCents: 1375000 })])[0];
   assert.equal(caba.received, 2074000);
   for (const mode of ["correo", "acordar"] as const) {
     const row = profitRows(state(), [sale({ mode })])[0];

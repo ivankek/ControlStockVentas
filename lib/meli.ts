@@ -100,7 +100,7 @@ export type RawOrder = {
   status: string;
   total_amount?: number;
   currency_id?: string;
-  payments?: { id: number; status: string }[];
+  payments?: { id: number; status: string; marketplace_fee?: number | null }[];
   buyer?: { first_name?: string; last_name?: string; nickname?: string };
   seller?: { id: number };
   shipping?: { id: number | null };
@@ -112,6 +112,7 @@ export type RawOrder = {
       variation_attributes?: { name: string; value_name: string }[];
     };
     quantity: number;
+    sale_fee?: number;
   }[];
 };
 

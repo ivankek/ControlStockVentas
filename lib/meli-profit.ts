@@ -3,10 +3,10 @@ import { shipmentDestination } from "./shipping";
 import { shippingResolverForQuery } from "./sale-shipping";
 import type { Sale } from "./profit";
 import { createGeorefResolver } from "./georef";
-import { paymentBase } from "./flex-credits";
+import { paymentBase, orderPaymentFee, type PaymentFees } from "./flex-credits";
 export const amountCents = (value: unknown): number | undefined => typeof value === "number" && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100)) ? Math.round(value * 100) : undefined;
 
-async function paymentNet(id: number, seller: number, token: string): Promise<{ net: number; base?: number } | undefined> {
+async function paymentNet(id: number, seller: number, token: string): Promise<{ net: number; fees: PaymentFees } | undefined> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const response = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(15000) });
     if ([401, 403, 404].includes(response.status)) return undefined;
@@ -15,7 +15,7 @@ async function paymentNet(id: number, seller: number, token: string): Promise<{ 
     const data = await response.json();
     if (String(data.id) !== String(id) || data.collector_id !== seller || data.currency_id !== "ARS" || data.status !== "approved" || data.transaction_amount_refunded > 0) return undefined;
     const net = amountCents(data.transaction_details?.net_received_amount);
-    return net === undefined ? undefined : { net, base: paymentBase(data) };
+    return net === undefined ? undefined : { net, fees: { transaction_amount: data.transaction_amount, taxes_amount: data.taxes_amount, fee_details: data.fee_details } };
   }
 }
 export async function salesPage(user: string, from: string, to: string, offset: number, accountId?: string, queryId?: string) {
@@ -52,7 +52,7 @@ export async function salesPage(user: string, from: string, to: string, offset: 
       const nets = await Promise.all([...new Set(approved.map((payment) => payment.id))].map((id) => {
         if (!Number.isSafeInteger(id)) return Promise.resolve(undefined);
         if (!payments.has(id)) payments.set(id, paymentNet(id, tokens.user_id, tokens.access_token));
-        return payments.get(id)!;
+        return payments.get(id)!.then((payment) => payment ? { net: payment.net, base: paymentBase(payment.fees, orderPaymentFee(raw, id)) } : undefined);
       }));
       if (nets.length && nets.every((value) => value !== undefined)) {
         sale.receivedCents = nets.reduce<number>((sum, value) => sum + value!.net, 0);

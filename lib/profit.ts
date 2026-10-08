@@ -51,6 +51,7 @@ export function profitRows(state: State, sales: Sale[]) {
     let bonus = 0, bonusAdded = 0, bonusCount = 0, bonusUnresolved = false;
     let bonusEstimate: ReturnType<typeof zoneBonus> | undefined;
     let bonusElsewhere = false;
+    let bonusReason: string | undefined;
     if (sale.mode === "flex" && sale.orderStatus === "paid" && !sale.cancelled && sale.shippingStatus !== "cancelled") {
       const key = sale.shipmentId ?? sale.id;
       const group = bonusGroups.get(key)!;
@@ -64,10 +65,17 @@ export function profitRows(state: State, sales: Sale[]) {
         if (note?.netCents === undefined) { bonusUnresolved = true; issues.push(bonusEstimate.reason); }
       } else if (!bonusElsewhere) {
         usedCredits.add(key); bonus = bonusEstimate.cents; bonusCount = 1;
-        // Manual received totals already include all income. Otherwise add the
-        // owner's zone estimate unless the payment breakdown includes it.
-        if (note?.netCents === undefined && received !== undefined && (sale.paymentBaseCents === undefined || received !== sale.paymentBaseCents + bonus)) {
-          bonusAdded = bonus; received += bonus;
+        // Reconcile the whole shipment: its shipping income can be in a later
+        // order's payment. Never add again merely because a breakdown is missing.
+        if (note?.netCents === undefined && received !== undefined) {
+          const complete = group.every((item) => item.paymentBaseCents !== undefined && item.receivedCents !== undefined && business.notes[item.id]?.netCents === undefined && item.paymentIds.every((id) => paymentCounts.get(id) === 1));
+          const included = complete ? group.reduce((sum, item) => sum + item.receivedCents! - item.paymentBaseCents!, 0) : undefined;
+          if (included === 0) { bonusAdded = bonus; received += bonus; }
+          else if (included !== bonus) {
+            bonusUnresolved = true;
+            bonusReason = "No se pudo verificar si el ingreso Flex ya está incluido en el recibido";
+            issues.push(bonusReason);
+          }
         }
       }
     }
@@ -88,7 +96,7 @@ export function profitRows(state: State, sales: Sale[]) {
     }
     const usable = sale.orderStatus === "paid" && !supplier.missing.length && received !== undefined && shipping !== undefined && !sale.review && !bonusUnresolved;
     if (sale.review) issues.push(sale.review);
-    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusEstimate, bonusElsewhere, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
+    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusEstimate, bonusElsewhere, bonusReason, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
   });
 }
 export function reportTotals(rows: ReturnType<typeof profitRows>, business: Business, from: string, to: string) {

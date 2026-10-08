@@ -28,7 +28,7 @@ export async function profitExcel(rows: Rows, state: State) {
     const destination = [row.sale.province, row.sale.city, row.sale.neighborhood].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ") || "Sin ubicación";
     const mode = row.sale.shippingCosts?.shippingError && row.sale.shippingCosts.isFlex === null ? "Envío no disponible" : row.sale.mode === "flex" ? "Flex" : row.sale.mode === "correo" ? "Mercado Envíos · correo" : "Acordar con comprador";
     const bonus = row.sale.mode !== "flex" ? "No aplica" : amount(row.bonusEstimate?.cents, "Sin zona / bruto");
-    const detail = row.sale.mode !== "flex" ? "" : row.bonusElsewhere ? "Contada en otra orden del envío" : row.manualNet ? "Incluida en recibido manual" : row.bonusUnresolved ? row.bonusEstimate?.reason ?? "Pendiente" : row.bonusAdded !== 0 ? "Estimada · sumada al recibido" : row.received === undefined ? "Estimada · falta recibido" : "Estimada · ya incluida";
+    const detail = row.sale.mode !== "flex" ? "" : row.bonusElsewhere ? "Contada en otra orden del envío" : row.manualNet ? "Incluida en recibido manual" : row.bonusUnresolved ? row.bonusReason ?? row.bonusEstimate?.reason ?? "Pendiente" : row.bonusAdded !== 0 ? "Estimada · sumada al recibido" : row.received === undefined ? "Estimada · falta recibido" : "Estimada · ya incluida";
     sheet.addRow([new Date(row.date + "T00:00:00Z"), row.sale.id, titles.join("\n"), products.join("\n"), destination,
       row.sale.cancelled || row.sale.shippingStatus === "cancelled" ? "Cancelado · " + mode : mode,
       row.flex ? row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida" : "",

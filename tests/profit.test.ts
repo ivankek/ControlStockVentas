@@ -4,7 +4,7 @@ import { emptyState } from "../lib/domain";
 import { businessCommand, emptyBusiness, flexCost, manualDispatches, updateBusiness } from "../lib/business";
 import { monthlyExpenses, expenseBreakdown, profitRows, reportTotals, type Sale } from "../lib/profit";
 
-const sale = (overrides: Partial<Sale> = {}): Sale => ({ id: "100", createdAt: "2026-09-10T15:00:00Z", mode: "correo", cancelled: false, orderStatus: "paid", grossCents: 10000, receivedCents: 8000, paymentIds: ["1"], issues: [], lines: [{ productId: "MLA1:0", quantity: 2 }], ...overrides });
+const sale = (overrides: Partial<Sale> = {}): Sale => ({ id: "100", createdAt: "2026-09-10T15:00:00Z", mode: "correo", cancelled: false, orderStatus: "paid", grossCents: 10000, receivedCents: 8000, paymentBaseCents: 8000, paymentIds: ["1"], issues: [], lines: [{ productId: "MLA1:0", quantity: 2 }], ...overrides });
 const state = () => ({ ...emptyState(), supplierProducts: [{ id: "p", name: "Producto", costs: [{ from: "2026-01-01", cents: 1000 }] }], supplierLinks: { "MLA1:0": { supplierId: "p", units: 2 } }, business: emptyBusiness() });
 
 test("confirmación manual se superpone sin guardar ventas y se puede quitar", () => {
