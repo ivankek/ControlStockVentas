@@ -6,6 +6,7 @@ import { today, money } from "@/lib/domain";
 import type { Order } from "@/lib/domain";
 import { dispatchMessage, filterDispatchOrders, type DispatchFilters, type DispatchQueryResult } from "@/lib/dispatch-query";
 import { FLEX_LABELS } from "@/lib/flex-zones";
+import type { DispatchJob } from "@/lib/dispatch-jobs";
 import OrderNoteEditor from "./order-note";
 
 const statuses: Record<string, string> = {
@@ -44,6 +45,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
   const [copyStatus, setCopyStatus] = useState("");
   const [result, setResult] = useViewState<DispatchQueryResult>("app/dispatch-query.tsx:result");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const emptyFilters: DispatchFilters = { from: "", to: "", shipping: "", order: "", reviewOnly: false, sort: "desc" };
   const [filters, setFilters] = useViewState<DispatchFilters>("app/dispatch-query.tsx:filters", emptyFilters);
@@ -57,26 +59,62 @@ export default function DispatchQuery({ token }: { token?: string }) {
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     controller.current?.abort();
-    setBusy(false);
-    setModalDay(undefined);
+    const request = new AbortController();
+    controller.current = request;
+    setBusy(false); setModalDay(undefined); setError("");
+    if (!token || !account) return;
+    setBusy(true); setProgress("Buscando una consulta anterior…");
+    void (async () => {
+      try { await followJob(request); }
+      catch (e) { if (!request.signal.aborted) setError(e instanceof Error ? e.message : "No se pudo recuperar la consulta."); }
+      finally { if (!request.signal.aborted) setBusy(false); }
+    })();
+    return () => request.abort();
+    // Recovery is scoped to the authenticated session and selected account.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, account]);
 
+  async function followJob(request: AbortController, initial?: DispatchJob) {
+    let job = initial;
+    for (;;) {
+      if (!job) {
+        const response = await fetch(accountPath("/api/sync"), { headers: { Authorization: "Bearer " + token }, signal: request.signal, cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || "No se pudo recuperar la consulta.");
+        if (request.signal.aborted) return;
+        job = data.job;
+      }
+      if (!job) return;
+      if (request.signal.aborted) return;
+      setDate(job.date_to); setFrom(job.date_from); setPeriod(job.date_from !== job.date_to);
+      if (job.status === "failed") throw Error(job.error || "La consulta no pudo completarse. Volvé a consultar.");
+      if (job.status === "done") { if (job.result) setResult(job.result); return; }
+      setProgress((job.progress.stage || "Preparando consulta") + (job.progress.total ? " · " + job.progress.done + " de " + job.progress.total : ""));
+      await new Promise<void>((resolve, reject) => {
+        const abort = () => { clearTimeout(timer); reject(new DOMException("Consulta interrumpida", "AbortError")); };
+        const timer = setTimeout(() => { request.signal.removeEventListener("abort", abort); resolve(); }, 2000);
+        request.signal.addEventListener("abort", abort, { once: true });
+        if (request.signal.aborted) abort();
+      });
+      job = undefined;
+    }
+  }
   async function consult() {
     if (!token) { setError("Iniciá sesión y conectá Mercado Libre para consultar."); return; }
     controller.current?.abort();
     const request = new AbortController();
     controller.current = request;
-    setBusy(true); setError(""); setCopyStatus(""); setResult(undefined); setModalDay(undefined); setFilters(emptyFilters);
+    setBusy(true); setError(""); setCopyStatus(""); setResult(undefined); setModalDay(undefined); setFilters(emptyFilters); setProgress("Iniciando consulta…");
     try {
       const response = await fetch(accountPath("/api/sync"), {
-        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ date, from: period ? from : date }), signal: request.signal,
+        method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ date, from: period ? from : date, background: true }), signal: request.signal,
       });
       const data = await response.json();
       if (!response.ok) throw Error(data.error || "No se pudo completar la consulta.");
-      if (!request.signal.aborted) setResult(data);
+      if (!request.signal.aborted) await followJob(request, data.job);
     } catch (e) {
-      if (!request.signal.aborted) setError(e instanceof Error ? e.message : "No se pudo consultar.");
+      if (!request.signal.aborted) setError(e instanceof Error ? e.message : "No se pudo consultar. Recargá para recuperar el avance.");
     } finally { if (!request.signal.aborted) setBusy(false); }
   }
   async function copy() {
@@ -121,10 +159,10 @@ export default function DispatchQuery({ token }: { token?: string }) {
     </label><button className="primary" disabled={busy || !date || (period && (!from || from > date))} onClick={() => void consult()}>
       {busy ? "Consultando…" : "Consultar despachos"}
     </button></div>
-    <p className="table-note">Los pedidos consultados son temporales. Se guardan únicamente las confirmaciones y los costos de envío que cargues manualmente.</p>
+    <p className="table-note">El resultado se conserva durante 15 minutos para recuperarlo al recargar. Tus confirmaciones y ajustes manuales se guardan de forma permanente.</p>
     {error && <p className="warning" role="alert">{error}</p>}
     {!result && !busy && !error && <div className="empty">Elegí un día o un rango de fechas y consultá los despachos registrados en Mercado Libre.</div>}
-    {busy && <p role="status">Consultando ventas e historial de envíos. Puede tardar unos minutos.</p>}
+    {busy && <p role="status">{progress}. Podés recargar la página y recuperar el avance.</p>}
     {result && <>
       <p className="table-note">Se muestran los despachos registrados entre {result.from.split("-").reverse().join("/")} y {result.date.split("-").reverse().join("/")}.</p>
       <p className="table-note">Estados consultados: {new Date(result.queriedAt).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}. <button disabled={busy} onClick={() => void consult()}>Actualizar estados</button></p>

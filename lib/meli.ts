@@ -130,10 +130,14 @@ export async function verifiedOrder(user: string, id: string, accountId?: string
 type Search = { results: RawOrder[]; paging: { total: number } };
 // Only one sync per account in this Node process. Database writes are separately atomic.
 const running = new Set<string>();
-export async function importOrders(user: string, previous: State, queryDate?: string, accountId?: string, queryFrom?: string) {
-  if (running.has(user)) throw Error("Ya hay una actualización en curso.");
-  running.add(user);
+export async function importOrders(user: string, previous: State, queryDate?: string, accountId?: string, queryFrom?: string, progress?: (stage: string, done: number, total: number) => Promise<void>) {
+  const scope = user + ":" + (accountId ?? "default");
+  const timings: Record<string, number> = {};
+  let stageStart = Date.now();
+  if (running.has(scope)) throw Error("Ya hay una actualización en curso.");
+  running.add(scope);
   try {
+    await progress?.("Buscando ventas", 0, 0);
     const tokens = await access(user, accountId);
     const raw = new Map<string, RawOrder>();
     const from = new Date((queryDate ? Date.parse(`${queryFrom ?? queryDate}T00:00:00-03:00`) : Date.now()) - (queryDate ? 7 : 90) * 86400000).toISOString();
@@ -160,7 +164,9 @@ export async function importOrders(user: string, previous: State, queryDate?: st
     }
     // Search is an index: read each authoritative order before displaying its status.
     // Limit concurrency to avoid a burst of requests for larger date ranges.
+    timings.searchMs = Date.now() - stageStart; stageStart = Date.now();
     const ids = [...raw.keys()];
+    await progress?.("Revisando ventas", 0, ids.length);
     for (let offset = 0; offset < ids.length; offset += 4) {
       const details = await Promise.all(ids.slice(offset, offset + 4).map(async (id) => {
         const detail = await get<RawOrder>(`/orders/${encodeURIComponent(id)}`, tokens.access_token);
@@ -170,6 +176,7 @@ export async function importOrders(user: string, previous: State, queryDate?: st
         return detail;
       }));
       for (const detail of details) raw.set(String(detail.id), detail);
+      await progress?.("Revisando ventas", Math.min(offset + 4, ids.length), ids.length);
     }
     // Retain older tracked orders, including settled ones, to detect later cancellations.
     for (const o of previous.orders)
@@ -181,13 +188,28 @@ export async function importOrders(user: string, previous: State, queryDate?: st
             tokens.access_token,
           ),
         );
+    timings.ordersMs = Date.now() - stageStart; stageStart = Date.now();
     const orders: Order[] = [];
     const products = new Map<string, Product>();
-    const shipments = new Map<
-      string,
-      { shipment: Shipment; history: History }
-    >();
+    const shipments = new Map<string, { shipment: Shipment; history: History; georef: Awaited<ReturnType<ReturnType<typeof createGeorefResolver>>> }>();
     const resolveGeoref = createGeorefResolver();
+    const shipmentIds = [...new Set([...raw.values()].filter(o => o.shipping?.id && (queryDate || o.status === "paid" || o.status === "partially_refunded" || previous.orders.some(p => p.id === String(o.id)))).map(o => String(o.shipping!.id)))];
+    await progress?.("Revisando envíos", 0, shipmentIds.length);
+    for (let offset = 0; offset < shipmentIds.length; offset += 4) {
+      // Await every request in a batch, even on failure, before releasing the lock.
+      const batch = await Promise.allSettled(shipmentIds.slice(offset, offset + 4).map(async sid => {
+        const shipment = normalizeShipment(await get<Shipment>("/shipments/" + sid, tokens.access_token));
+        if (String(shipment.id) !== sid) throw Error("El envío recibido no coincide con la venta.");
+        const history = shipment.mode === "me2" ? await get<History>("/shipments/" + sid + "/history", tokens.access_token) : [];
+        if (!Array.isArray(history)) throw Error("El historial de un envío no tiene el formato esperado.");
+        const georef = await resolveGeoref(shipment);
+        shipments.set(sid, { shipment, history, georef });
+      }));
+      const failed = batch.find(r => r.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+      await progress?.("Revisando envíos", Math.min(offset + 4, shipmentIds.length), shipmentIds.length);
+    }
+    timings.shipmentsMs = Date.now() - stageStart; stageStart = Date.now();
     for (const o of raw.values()) {
       if (o.seller?.id && o.seller.id !== tokens.user_id)
         throw Error("Se recibió una venta de otra cuenta.");
@@ -225,30 +247,11 @@ export async function importOrders(user: string, previous: State, queryDate?: st
       };
       if (o.shipping?.id) {
         const sid = String(o.shipping.id);
-        let info = shipments.get(sid);
-        if (!info) {
-          const shipment = normalizeShipment(await get<Shipment>(
-            `/shipments/${sid}`,
-            tokens.access_token,
-          ));
-          const history =
-            shipment.mode === "me2"
-              ? await get<History>(
-                  `/shipments/${sid}/history`,
-                  tokens.access_token,
-                )
-              : [];
-          if (!Array.isArray(history))
-            throw Error(
-              "El historial de un envío no tiene el formato esperado.",
-            );
-          info = { shipment, history };
-          shipments.set(sid, info);
-        }
+        const info = shipments.get(sid)!;
         const s = info.shipment;
         order.receiverName = s.destination?.receiver_name ?? s.receiver_address?.receiver_name;
         Object.assign(order, shipmentDestination(s));
-        order.georef = await resolveGeoref(s);
+        order.georef = info.georef;
         order.shippingStatus = s.status;
         order.shippingSubstatus = s.substatus;
         order.shipmentId = sid;
@@ -292,16 +295,17 @@ export async function importOrders(user: string, previous: State, queryDate?: st
     return {
       orders,
       products: [...products.values()],
+      timings: { ...timings, assembleMs: Date.now() - stageStart },
       syncedAt: new Date().toISOString(),
       syncWarning: `Importación de ventas ${queryDate ? "desde 7 días antes del inicio del período consultado" : "de los últimos 90 días"} y pedidos ya registrados. Ventas anteriores no importadas requieren revisión.${process.env.MELI_DISPATCH_RULES_VERIFIED !== "true" ? " Detección automática pendiente de validación con tus envíos reales." : ""}`,
     };
   } finally {
-    running.delete(user);
+    running.delete(scope);
   }
 }
 export function mergeImport(
   state: State,
-  result: Awaited<ReturnType<typeof importOrders>>,
+  result: Omit<Awaited<ReturnType<typeof importOrders>>, "timings">,
 ): State {
   const next = structuredClone(state);
   for (const product of result.products) {
