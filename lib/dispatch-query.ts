@@ -8,7 +8,7 @@ export function dispatchQueryResult(result: { orders: Order[]; products: Product
     orders: result.orders.filter((o) => o.dispatchedDate && o.dispatchedDate >= from && o.dispatchedDate <= date),
     unverified: result.orders.filter((o) => !o.dispatchedDate),
     products: result.products,
-    warning: "Los resultados incluyen únicamente despachos del período elegido, en horario argentino. Para encontrar compras anteriores despachadas en estas fechas, se revisan ventas creadas hasta 90 días antes del inicio. Las compras más antiguas pueden quedar fuera.",
+    warning: "Los resultados incluyen únicamente despachos del período elegido, en horario argentino. Para encontrar compras anteriores despachadas en estas fechas, se revisan ventas creadas hasta 7 días antes del inicio. Las compras más antiguas pueden quedar fuera.",
   };
 }
 export type DispatchDay = { date: string; supplier: ReturnType<typeof import("./supplier").supplierReport> };

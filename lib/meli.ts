@@ -136,7 +136,7 @@ export async function importOrders(user: string, previous: State, queryDate?: st
   try {
     const tokens = await access(user, accountId);
     const raw = new Map<string, RawOrder>();
-    const from = new Date((queryDate ? Date.parse(`${queryFrom ?? queryDate}T00:00:00-03:00`) : Date.now()) - 90 * 86400000).toISOString();
+    const from = new Date((queryDate ? Date.parse(`${queryFrom ?? queryDate}T00:00:00-03:00`) : Date.now()) - (queryDate ? 7 : 90) * 86400000).toISOString();
     const until = queryDate ? `&order.date_created.to=${encodeURIComponent(`${queryDate}T23:59:59.999-03:00`)}` : "";
     let total = Infinity;
     for (let offset = 0; offset < total; offset += 50) {
@@ -293,7 +293,7 @@ export async function importOrders(user: string, previous: State, queryDate?: st
       orders,
       products: [...products.values()],
       syncedAt: new Date().toISOString(),
-      syncWarning: `Importación de ventas de los últimos 90 días y pedidos ya registrados. Ventas anteriores no importadas requieren revisión.${process.env.MELI_DISPATCH_RULES_VERIFIED !== "true" ? " Detección automática pendiente de validación con tus envíos reales." : ""}`,
+      syncWarning: `Importación de ventas ${queryDate ? "desde 7 días antes del inicio del período consultado" : "de los últimos 90 días"} y pedidos ya registrados. Ventas anteriores no importadas requieren revisión.${process.env.MELI_DISPATCH_RULES_VERIFIED !== "true" ? " Detección automática pendiente de validación con tus envíos reales." : ""}`,
     };
   } finally {
     running.delete(user);

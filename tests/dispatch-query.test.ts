@@ -11,7 +11,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
     t.after(() => { if (old === undefined) delete process.env[key]; else process.env[key] = old; });
   }
   const calls: string[] = [];
-  let expectedFrom = "2026-06-16T03:00:00.000Z";
+  let expectedFrom = "2026-09-07T03:00:00.000Z";
   let detailFailure = false;
   const tokens = seal({ access_token: "test", refresh_token: "test", expires_at: Date.now() + 3600000, user_id: 42 });
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
@@ -75,7 +75,7 @@ test("consulta por fecha: historial argentino, sin escrituras ni filtro por esta
   assert.deepEqual(data.unverified.map((o: { id: string }) => o.id), ["3"]);
   assert.ok(data.supplier);
   assert.equal(data.supplier.complete, false);
-  expectedFrom = "2026-06-15T03:00:00.000Z";
+  expectedFrom = "2026-09-06T03:00:00.000Z";
   const range = await POST(request("2026-09-14", "2026-09-13"));
   assert.equal(range.status, 200);
   const rangeData = await range.json();
