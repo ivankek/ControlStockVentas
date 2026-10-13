@@ -4,6 +4,7 @@ import { zoneBonus } from "./flex-bonus-zones";
 import { supplierReport } from "./supplier";
 import type { FlexCredit } from "./flex-credits";
 import type { SaleShipping } from "./sale-shipping";
+import { periodExpenses } from "./business-expenses";
 export type Sale = Order & { shippingCosts?: SaleShipping; flexReconciliation?: "deferred" | "queried" | "partial"; grossCents?: number; receivedCents?: number; paymentBaseCents?: number; flexCredits?: FlexCredit[]; flexCreditsUnavailable?: boolean; paymentIds: string[]; issues: string[] };
 export function monthlyExpenses(business: Business, from: string, to: string) {
   let tax = 0, billing = 0;
@@ -52,17 +53,24 @@ export function profitRows(state: State, sales: Sale[]) {
     let bonusEstimate: ReturnType<typeof zoneBonus> | undefined;
     let bonusElsewhere = false;
     let bonusReason: string | undefined;
+    let manualBonus: "included" | "add" | undefined;
     if (sale.mode === "flex" && sale.orderStatus === "paid" && !sale.cancelled && sale.shippingStatus !== "cancelled") {
       const key = sale.shipmentId ?? sale.id;
       const group = bonusGroups.get(key)!;
+      const decisions = [...new Set(group.map((item) => business.notes[item.id]?.flexBonus).filter((v) => v !== undefined))];
+      manualBonus = decisions.length === 1 ? decisions[0] : undefined;
       const gross = group.every((item) => item.grossCents !== undefined) ? group.reduce((sum, item) => sum + item.grossCents!, 0) : undefined;
       const estimates = group.map((item) => zoneBonus(item, gross, flexByOrder[item.id]?.zone, flexByOrder[item.id]?.method === "manual"));
       const known = estimates.filter((item) => item.cents !== undefined);
       bonusEstimate = known[0] ?? estimates[0];
       if (new Set(known.map((item) => item.zone)).size > 1) bonusEstimate = { cents: undefined, reduced: false, reason: "Destinos contradictorios entre órdenes del envío" };
       bonusElsewhere = usedCredits.has(key);
-      if (bonusEstimate.cents === undefined) {
-        if (note?.netCents === undefined) { bonusUnresolved = true; issues.push(bonusEstimate.reason); }
+      if (decisions.length > 1) {
+        bonusUnresolved = true;
+        bonusReason = "Confirmaciones de bonificación contradictorias en el mismo envío: revisá sus órdenes";
+        issues.push(bonusReason);
+      } else if (bonusEstimate.cents === undefined) {
+        if (note?.netCents === undefined && manualBonus !== "included") { bonusUnresolved = true; issues.push(bonusEstimate.reason); }
       } else if (!bonusElsewhere) {
         usedCredits.add(key); bonus = bonusEstimate.cents; bonusCount = 1;
         // Reconcile the whole shipment: its shipping income can be in a later
@@ -70,8 +78,10 @@ export function profitRows(state: State, sales: Sale[]) {
         if (note?.netCents === undefined && received !== undefined) {
           const complete = group.every((item) => item.paymentBaseCents !== undefined && item.receivedCents !== undefined && business.notes[item.id]?.netCents === undefined && item.paymentIds.every((id) => paymentCounts.get(id) === 1));
           const included = complete ? group.reduce((sum, item) => sum + item.receivedCents! - item.paymentBaseCents!, 0) : undefined;
-          if (included === 0) { bonusAdded = bonus; received += bonus; }
-          else if (included !== bonus) {
+          const hasManualReceived = group.some((item) => business.notes[item.id]?.netCents !== undefined);
+          if (manualBonus === "included") { /* Confirmed by the seller; do not add again. */ }
+          else if ((manualBonus === "add" && !hasManualReceived) || (manualBonus === undefined && included === 0)) { bonusAdded = bonus; received += bonus; }
+          else if (manualBonus === "add" || included !== bonus) {
             bonusUnresolved = true;
             bonusReason = "No se pudo verificar si el ingreso Flex ya está incluido en el recibido";
             issues.push(bonusReason);
@@ -96,11 +106,12 @@ export function profitRows(state: State, sales: Sale[]) {
     }
     const usable = sale.orderStatus === "paid" && !supplier.missing.length && received !== undefined && shipping !== undefined && !sale.review && !bonusUnresolved;
     if (sale.review) issues.push(sale.review);
-    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusEstimate, bonusElsewhere, bonusReason, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
+    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusEstimate, bonusElsewhere, bonusReason, manualBonus, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
   });
 }
 export function reportTotals(rows: ReturnType<typeof profitRows>, business: Business, from: string, to: string) {
   const selected = rows.filter((row) => row.date >= from && row.date <= to);
-  const expenses = { tax: 0, billing: 0, total: 0 }; // Monthly expenses are suspended.
-  return { gross: selected.reduce((sum, row) => sum + (row.gross ?? 0), 0), net: selected.reduce((sum, row) => sum + (row.net ?? 0), 0) - expenses.total, expenses, missingGross: selected.filter((row) => row.gross === undefined).length, missingNet: selected.filter((row) => row.net === undefined).length, missingMonths: [] as string[], count: selected.length };
+  const expenses = periodExpenses(business, from, to);
+  const salesNet = selected.reduce((sum, row) => sum + (row.net ?? 0), 0);
+  return { gross: selected.reduce((sum, row) => sum + (row.gross ?? 0), 0), salesNet, net: salesNet - expenses.total, expenses, missingGross: selected.filter((row) => row.gross === undefined).length, missingNet: selected.filter((row) => row.net === undefined).length, missingMonths: [...new Set(expenses.missingDates.map((date) => date.slice(0, 7)))], count: selected.length };
 }

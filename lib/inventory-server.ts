@@ -40,7 +40,10 @@ export async function scopedBusiness(user: string, account: { id: string; seller
   const legacy = await admin().from("meli_connections").select("seller_id").eq("owner_id", user).maybeSingle();
   if (legacy.error) throw Error("No se pudo verificar el origen de las notas anteriores.");
   const previousSeller = legacy.data?.seller_id ?? (await admin().from("meli_accounts").select("seller_id").eq("owner_id", user).eq("id", account.id).maybeSingle()).data?.seller_id;
-  return { ...value, notes: Object.fromEntries(Object.entries(value.notes).filter(([, note]) => note.accountId ? note.accountId === account.id : previousSeller === account.seller_id)) };
+  return { ...value,
+    expenseCycles: value.expenseCycles?.[account.id] ? { [account.id]: value.expenseCycles[account.id] } : {},
+    expensePeriods: (value.expensePeriods ?? []).filter((p) => p.accountId === account.id),
+    notes: Object.fromEntries(Object.entries(value.notes).filter(([, note]) => note.accountId ? note.accountId === account.id : previousSeller === account.seller_id)) };
 }
 export async function accountListings(accountId: string): Promise<Listing[]> {
   const items: Listing[] = [];

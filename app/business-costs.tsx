@@ -5,8 +5,12 @@ import { emptyBusiness, resolveFlex, type Business } from "@/lib/business";
 import { FLEX_ZONES, FLEX_LABELS } from "@/lib/flex-zones";
 import { money, today } from "@/lib/domain";
 import FlexCarrier from "./flex-carrier";
+import ExpensePeriods from "./expense-periods";
+import { useAccountPath, useInventory } from "./inventory-context";
 
 export default function BusinessCosts({ token }: { token?: string }) {
+  const accountPath = useAccountPath();
+  const { account } = useInventory();
   const [data, setData] = useViewState<Business>("app/business-costs.tsx:data", emptyBusiness);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -14,24 +18,26 @@ export default function BusinessCosts({ token }: { token?: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (token) fetch("/api/business", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal }).then(async (response) => { const result = await response.json(); if (!response.ok) throw Error(result.error); return result; }).then((result) => { setData(result); setLoaded(true); }).catch((e) => { if (!controller.signal.aborted) setMessage(e.message); });
+    setLoaded(false);
+    if (token) fetch(accountPath("/api/business"), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal }).then(async (response) => { const result = await response.json(); if (!response.ok) throw Error(result.error); return result; }).then((result) => { if (!controller.signal.aborted) { setData(result); setLoaded(true); } }).catch((e) => { if (!controller.signal.aborted) setMessage(e.message); });
     return () => controller.abort();
-  }, [token]);
+  }, [token, account]);
   async function save(action: unknown) {
-    if (!token) return;
+    if (!token) return false;
     setBusy(true); setMessage("");
     try {
-      const response = await fetch("/api/business", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(action) });
+      const response = await fetch(accountPath("/api/business"), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(action) });
       const result = await response.json(); if (!response.ok) throw Error(result.error);
       setData(result); setMessage("Guardado. Volvé a consultar Ganancias para aplicar los costos.");
-
-    } catch (e) { setMessage((e as Error).message); }
+      return true;
+    } catch (e) { setMessage((e as Error).message); return false; }
     finally { setBusy(false); }
   }
 
   return <>
     {!token && <p className="notice">Iniciá sesión para cargar los gastos de tu negocio.</p>}
     {message && <p className="notice" role="status">{message}</p>}
+    <ExpensePeriods data={data} busy={busy} loaded={loaded && !!token} save={save} />
     <FlexCarrier token={token} />
     <section className="panel"><div className="panel-title"><h2>Envíos</h2></div>
       <div className="shipping-defaults">

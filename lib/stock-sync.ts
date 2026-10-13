@@ -82,3 +82,16 @@ export async function syncNextStock(actor: string | null, retry = false) {
   if (finished.error) throw Error("No se pudo guardar el resultado de sincronización. Quedará pendiente para verificar nuevamente.");
   return true;
 }
+
+// Runs on the server after saving, independently of the browser. SQL leases
+// coordinate this drain with the UI and scheduled worker. Leave time for the
+// last ML request to finish within the route's 180-second limit.
+export async function syncPendingStock(actor: string) {
+  const deadline = Date.now() + 90000;
+  let processed = 0;
+  while (Date.now() < deadline && processed < 100) {
+    if (!await syncNextStock(actor)) break;
+    processed++;
+  }
+  return processed;
+}

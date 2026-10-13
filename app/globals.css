@@ -747,6 +747,11 @@ h1 { margin-bottom: 6px; font-size: 30px; }
 .shipping-defaults form { display: grid; gap: 12px; margin-top: 14px; }
 .shipping-defaults label { display: grid; gap: 6px; font-size: 13px; }
 .shipping-defaults input { width: 100%; min-width: 0; }
+.expense-periods > p, .expense-periods > label, .expense-periods > .toolbar { margin: 18px 24px; }
+.expense-periods > label { display: grid; gap: 6px; max-width: 260px; }
+.expense-periods .shipping-defaults > label { min-width: 0; }
+.expense-periods .shipping-defaults > button { align-self: end; }
+.expense-periods td small { display: block; margin-top: 5px; }
 @media (max-width: 1100px) {
   .shell > aside { width: 232px; padding: 20px 12px; }
   .shell .content { padding: 20px; }

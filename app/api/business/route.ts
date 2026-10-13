@@ -7,7 +7,9 @@ export async function GET(request: Request) {
   try {
     const user = await owner(request); await adminProfile(user);
     let business = (await readState(user)).state.business ?? emptyBusiness();
-    if (requestedAccount(request)) business = await scopedBusiness(user, await accountFor(user, requestedAccount(request)), business);
+    if (requestedAccount(request) || business.expensePeriods?.length || Object.keys(business.expenseCycles ?? {}).length) {
+      business = await scopedBusiness(user, await accountFor(user, requestedAccount(request)), business);
+    }
     return Response.json(business, { headers: { "Cache-Control": "no-store" } });
   }
   catch (error) { return fail(error); }
@@ -18,11 +20,11 @@ export async function POST(request: Request) {
     const person = await sellerProfile(user);
     const action = businessCommand.parse(await request.json());
     // Dispatch notes remain available to sellers; financial changes are admin-only.
-    if (action.type !== "note" || action.netCents !== undefined) await adminProfile(user);
-    const account = action.type === "note" ? await accountFor(user, requestedAccount(request)) : undefined;
+    if (action.type !== "note" || action.netCents !== undefined || action.flexBonus !== undefined) await adminProfile(user);
+    const account = action.type === "note" || action.type.startsWith("expense") ? await accountFor(user, requestedAccount(request)) : undefined;
     const order = action.type === "note" ? await verifiedOrder(user, action.id, account!.id) : undefined;
     const state = await mutate(user, (state) => {
-      const next = updateBusiness(state, action, order);
+      const next = updateBusiness(state, action, order, account?.id);
       if (action.type === "note") next.business!.notes[action.id].accountId = account!.id;
       return next;
     });

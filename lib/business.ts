@@ -1,22 +1,29 @@
 import { z } from "zod";
 import { detectFlexZone, FLEX_RATES, FLEX_ZONES, type FlexSelection, type FlexZone, type FlexDestination } from "./flex-zones";
 import { localDate, today, type Order, type State } from "./domain";
+import { daysBetween, type ExpenseCycle, type ExpensePeriod } from "./business-expenses";
 
-export type OrderNote = { accountId?: string; flexZone?: FlexSelection; dispatchedDate?: string; shippingCents?: number; netCents?: number; updatedAt: string };
+export type OrderNote = { accountId?: string; flexBonus?: "included" | "add"; flexZone?: FlexSelection; dispatchedDate?: string; shippingCents?: number; netCents?: number; updatedAt: string };
 export type Business = {
   flexRates?: Partial<Record<FlexZone, { from: string; cents: number }[]>>;
   notes: Record<string, OrderNote>;
   zones: { id: string; name: string; province: string; cities: string[]; rates: { from: string; cents: number }[] }[];
   months: Record<string, { taxCents: number; billingCents: number }>;
+  expenseCycles?: Record<string, ExpenseCycle>;
+  expensePeriods?: ExpensePeriod[];
 };
 export const emptyBusiness = (): Business => ({ notes: {}, zones: [], months: {} });
 const cents = z.number().int().min(0).max(100000000000);
+const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 export const businessCommand = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("note"), id: z.string().regex(/^\d+$/), flexZone: z.enum([...FLEX_ZONES, "NONE"]).nullable().optional(), dispatchedDate: z.iso.date().nullable().optional(), shippingCents: cents.nullable().optional(), netCents: cents.nullable().optional() }),
+  z.object({ type: z.literal("note"), id: z.string().regex(/^\d+$/), flexBonus: z.enum(["included", "add"]).nullable().optional(), flexZone: z.enum([...FLEX_ZONES, "NONE"]).nullable().optional(), dispatchedDate: z.iso.date().nullable().optional(), shippingCents: cents.nullable().optional(), netCents: cents.nullable().optional() }),
+  z.object({ type: z.literal("expenseCycle"), startDay: z.number().int().min(1).max(31), endDay: z.number().int().min(1).max(31), startMonth: month }),
+  z.object({ type: z.literal("expensePeriod"), month, from: z.iso.date(), to: z.iso.date(), mlCents: cents, monotributoCents: cents, iibbCents: cents, otherCents: cents, note: z.string().trim().max(500) }).refine((p) => p.from <= p.to && daysBetween(p.from, p.to) <= 62 && p.from.slice(0, 7) === p.month, "Revisá las fechas del período (hasta 62 días, dentro del mes de inicio seleccionado)."),
+  z.object({ type: z.literal("expenseDelete"), month }),
   z.object({ type: z.literal("flexRate"), zone: z.enum(FLEX_ZONES), from: z.iso.date(), cents }),
   z.object({ type: z.literal("zone"), id: z.string().uuid(), name: z.string().trim().min(1).max(100), province: z.string().trim().min(1).max(100), cities: z.array(z.string().trim().min(1).max(100)).min(1).max(200), from: z.iso.date(), cents }),
 ]);
-export function updateBusiness(state: State, action: z.infer<typeof businessCommand>, order?: Order): State {
+export function updateBusiness(state: State, action: z.infer<typeof businessCommand>, order?: Order, accountId?: string): State {
   const next = structuredClone(state);
   const business = next.business ??= emptyBusiness();
   if (action.type === "note") {
@@ -27,13 +34,25 @@ export function updateBusiness(state: State, action: z.infer<typeof businessComm
     if (action.dispatchedDate && (order.cancelled || action.dispatchedDate > today() || action.dispatchedDate < localDate(order.createdAt))) throw Error("Revisá el estado y la fecha del despacho.");
     const note = business.notes[action.id] ?? { updatedAt: "" };
     if (action.flexZone !== undefined && order.mode !== "flex") throw Error("La zona Flex solo se aplica a envíos Flex.");
-    for (const key of ["dispatchedDate", "shippingCents", "netCents", "flexZone"] as const) {
+    if (action.flexBonus !== undefined && order.mode !== "flex") throw Error("La confirmación de bonificación solo se aplica a Flex.");
+    for (const key of ["dispatchedDate", "shippingCents", "netCents", "flexZone", "flexBonus"] as const) {
       const value = action[key];
       if (value === null) delete note[key];
       else if (value !== undefined) Object.assign(note, { [key]: value });
     }
     note.updatedAt = new Date().toISOString();
     business.notes[action.id] = note;
+  } else if (action.type === "expenseCycle" || action.type === "expensePeriod" || action.type === "expenseDelete") {
+    if (!accountId) throw Error("Seleccioná una cuenta para guardar sus gastos.");
+    if (action.type === "expenseCycle") {
+      (business.expenseCycles ??= {})[accountId] = { startDay: action.startDay, endDay: action.endDay, startMonth: action.startMonth };
+    } else {
+      business.expensePeriods = (business.expensePeriods ?? []).filter((p) => p.accountId !== accountId || p.month !== action.month);
+      if (action.type === "expensePeriod") {
+        const { type: _, ...period } = action;
+        business.expensePeriods.push({ ...period, accountId, updatedAt: new Date().toISOString() });
+      }
+    }
   } else if (action.type === "flexRate") {
     const rates = business.flexRates ??= {};
     rates[action.zone] = [...(rates[action.zone] ?? []).filter((r) => r.from !== action.from), { from: action.from, cents: action.cents }].sort((a, b) => a.from.localeCompare(b.from));

@@ -26,6 +26,10 @@ test("solo ADMIN accede a finanzas; USER no puede modificar netos ni tarifas", a
   role = "USER";
   assert.equal((await save(request({ type: "flexRate", zone: "CABA", from: "2026-09-01", cents: 1 }))).status, 403);
   assert.equal((await save(request({ type: "note", id: "100", netCents: 1 }))).status, 403);
+  assert.equal((await save(request({ type: "note", id: "100", flexBonus: "add" }))).status, 403);
+  assert.equal((await save(request({ type: "expenseCycle", startDay: 10, endDay: 10, startMonth: "2026-10" }))).status, 403);
+  assert.equal((await save(request({ type: "expensePeriod", month: "2026-10", from: "2026-10-10", to: "2026-11-10", mlCents: 1, monotributoCents: 0, iibbCents: 0, otherCents: 0, note: "" }))).status, 403);
+  assert.equal((await save(request({ type: "expenseDelete", month: "2026-10" }))).status, 403);
   role = "ADMIN";
   assert.equal((await business(request())).status, 200);
 });

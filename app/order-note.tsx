@@ -17,7 +17,7 @@ export default function OrderNoteEditor({ order, note, token, onSaved, financial
       const amount = (key: string) => data.get(key) === "" ? null : Math.round(Number(data.get(key)) * 100);
       setBusy(true); setError("");
       try {
-        const response = await fetch(accountPath("/api/business"), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ type: "note", id: order.id, ...(order.mode === "flex" ? { flexZone: data.get("flexZone") || null } : {}), ...(order.mode === "acordar" ? { ...(financial ? {} : { dispatchedDate: dispatched ? data.get("date") : null }), shippingCents: amount("shipping") } : {}), ...(financial ? { netCents: amount("net") } : {}) }) });
+        const response = await fetch(accountPath("/api/business"), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ type: "note", id: order.id, ...(order.mode === "flex" ? { flexZone: data.get("flexZone") || null, ...(financial ? { flexBonus: data.get("flexBonus") || null } : {}) } : {}), ...(order.mode === "acordar" ? { ...(financial ? {} : { dispatchedDate: dispatched ? data.get("date") : null }), shippingCents: amount("shipping") } : {}), ...(financial ? { netCents: amount("net") } : {}) }) });
         const result = await response.json(); if (!response.ok) throw Error(result.error);
         setOpen(false); onSaved();
       } catch (e) { setError((e as Error).message); }
@@ -30,6 +30,7 @@ export default function OrderNoteEditor({ order, note, token, onSaved, financial
       </>}
       {order.mode === "flex" && <label>Zona Flex<select name="flexZone" defaultValue={note?.flexZone ?? ""} disabled={busy}><option value="">Automático</option>{[...FLEX_ZONES, "NONE" as const].map((z) => <option key={z} value={z}>{FLEX_LABELS[z]}</option>)}</select><small>La selección manual tiene prioridad. Sin Flex aplica $0 de logística propia.</small></label>}
       {financial && <label>Neto recibido verificado ($)<input name="net" type="number" min="0" step="0.01" defaultValue={note?.netCents === undefined ? "" : note.netCents / 100} placeholder="Usar dato de la API" disabled={busy} /><small>Importe final después de cargos y ajustes de esta venta. Vacío vuelve a usar la API.</small></label>}
+      {financial && order.mode === "flex" && <label>Bonificación Flex en el recibido<select name="flexBonus" defaultValue={note?.flexBonus ?? ""} disabled={busy}><option value="">Verificar automáticamente</option><option value="included">Ya está incluida: no sumarla</option><option value="add">Falta sumarla al recibido</option></select><small>Se aplica una vez por envío. Si completás un neto recibido manual, ese importe final tiene prioridad e incluye la bonificación. Automático quita tu confirmación.</small></label>}
       <button disabled={busy || !token}>{busy ? "Guardando…" : "Guardar"}</button>
       {error && <small role="alert">{error}</small>}
     </form>}
