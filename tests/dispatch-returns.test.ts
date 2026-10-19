@@ -25,14 +25,14 @@ test("busca por vendedor y última actualización, pagina y no confunde cancelac
       const q = new URL(`https://test${path}`).searchParams;
       assert.equal(q.get("players.user_id"), "111");
       assert.equal(q.get("players.role"), "respondent");
-      assert.equal(q.get("range"), "last_updated:after:2026-10-12T00:00:00.000-03:00");
+      assert.equal(q.get("range"), "last_updated:after:2026-10-12T03:00:00.000+00:00,before:2026-10-19T14:00:00.000+00:00");
       return { paging: { total: 3 }, data: [{ id: 1 }, { id: 2, related_entities: [] }] };
     }
     if (path.endsWith("/claims/1")) return { id: 1, related_entities: ["return"] };
     if (path.endsWith("/1/returns")) return raw;
     if (path.endsWith("/history")) return [];
     throw Error("unexpected path");
-  }, "111", "2026-10-12", "2026-10-17", 0);
+  }, "111", "2026-10-12", "2026-10-17", 0, new Date("2026-10-19T14:00:00.000Z"));
   assert.equal(page.next, 2);
   assert.equal(page.returns.length, 1);
   assert.deepEqual(page.warnings, []);

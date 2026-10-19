@@ -30,10 +30,13 @@ export function physicalReturn(raw: unknown, from: string, to: string) {
   return value;
 }
 
-// Search by last update, without an upper bound: older returns can change after
-// the selected period. Check creation, shipping and delivery events afterwards.
-export async function returnsPage(read: (path: string) => Promise<unknown>, seller: string, from: string, to: string, offset: number): Promise<ReturnsPage> {
-  const query = new URLSearchParams({ "players.user_id": seller, "players.role": "respondent", range: `last_updated:after:${from}T00:00:00.000-03:00`, sort: "last_updated:asc", limit: "20", offset: String(offset) });
+// Claims search documents a closed after/before interval. Search through now,
+// not the selected end date: older returns may have been updated afterwards.
+// The return's actual events determine whether it belongs to the period.
+export async function returnsPage(read: (path: string) => Promise<unknown>, seller: string, from: string, to: string, offset: number, now = new Date()): Promise<ReturnsPage> {
+  const start = new Date(`${from}T00:00:00.000-03:00`).toISOString().replace("Z", "+00:00");
+  const end = now.toISOString().replace("Z", "+00:00");
+  const query = new URLSearchParams({ "players.user_id": seller, "players.role": "respondent", range: `last_updated:after:${start},before:${end}`, sort: "last_updated:asc", limit: "20", offset: String(offset) });
   const page = z.object({ paging: z.object({ total: z.number().int().nonnegative() }), data: z.array(claimSchema) }).parse(await read(`/post-purchase/v1/claims/search?${query}`));
   const returns: DispatchReturn[] = [], warnings: string[] = [];
   for (let i = 0; i < page.data.length; i += 4) {

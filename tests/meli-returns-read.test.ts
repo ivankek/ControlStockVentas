@@ -2,6 +2,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readReturnResource } from "../lib/meli-returns-read";
 
+test("400 numérico no oculta invalid_query y no expone el mensaje crudo", async () => {
+  const original = global.fetch;
+  global.fetch = async () => Response.json({ code: 400, error: "invalid_query", message: "private-user-data" }, { status: 400 });
+  try {
+    await assert.rejects(readReturnResource("/post-purchase/v1/claims/search?players.user_id=123", "secret-token"), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /invalid_query/);
+      assert.match(error.message, /parámetros/);
+      assert.doesNotMatch(error.message, /private-user-data|secret-token/);
+      return true;
+    });
+  } finally { global.fetch = original; }
+});
+
 test("403 conserva recurso y código sin filtrar cuerpo privado ni token", async () => {
   const original = global.fetch;
   global.fetch = async () => Response.json({ code: "PA_UNAUTHORIZED_RESULT_FROM_POLICIES", message: "private-user-data", status: 403 }, { status: 403 });

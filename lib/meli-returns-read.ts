@@ -9,11 +9,13 @@ export async function readReturnResource(path: string, token: string): Promise<u
       await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1))); continue;
     }
     const body = await response.json().catch(() => null);
-    const candidate = body?.code ?? body?.error;
-    const code = typeof candidate === "string" && /^[A-Za-z0-9_]{1,100}$/.test(candidate) ? ` Código: ${candidate}.` : "";
+    // Some responses use code: 400 and error: "invalid_query". A numeric code
+    // must not hide the useful machine-readable error alongside it.
+    const candidate = [body?.code, body?.error, body?.error?.code, body?.cause?.code].find((value) => typeof value === "string" && /^[A-Za-z0-9_.-]{1,100}$/.test(value));
+    const code = candidate ? ` Código: ${candidate}.` : "";
     const explanation = response.status === 403
       ? "Mercado Libre rechazó el acceso. Revisá los permisos funcionales de la aplicación para reclamos y devoluciones; si ya están habilitados, hace falta revisar la autorización de la cuenta."
-      : response.status === 401 ? "La autorización venció. Volvé a conectar la cuenta." : "Mercado Libre no pudo completar la consulta.";
+      : response.status === 401 ? "La autorización venció. Volvé a conectar la cuenta." : response.status === 400 ? "Mercado Libre rechazó los parámetros de la consulta." : "Mercado Libre no pudo completar la consulta.";
     throw Object.assign(Error(`${explanation} Recurso: ${resource} (${response.status}).${code}`), { status: response.status === 403 ? 403 : 502 });
   }
   throw Error("No se pudo consultar Mercado Libre.");
