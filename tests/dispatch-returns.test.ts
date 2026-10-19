@@ -30,12 +30,33 @@ test("busca por vendedor y última actualización, pagina y no confunde cancelac
     }
     if (path.endsWith("/claims/1")) return { id: 1, related_entities: ["return"] };
     if (path.endsWith("/1/returns")) return raw;
+    if (path.endsWith("/history")) return [];
     throw Error("unexpected path");
   }, "111", "2026-10-12", "2026-10-17", 0);
   assert.equal(page.next, 2);
   assert.equal(page.returns.length, 1);
   assert.deepEqual(page.warnings, []);
-  assert.equal(paths.length, 3);
+  assert.equal(paths.length, 5);
+});
+
+test("incluye llegadas o despachos de la semana aunque la devolución se inició antes", () => {
+  const earlier = { ...raw, date_created: "2026-10-05T12:00:00.000-03:00" };
+  for (const status of ["shipped", "delivered"]) {
+    const value = { ...earlier, shipments: [{ ...raw.shipments[0], history: [{ status, date: "2026-10-13T15:00:00.000Z" }] }] };
+    assert.ok(physicalReturn(value, "2026-10-12", "2026-10-17"));
+    assert.equal(physicalReturn(value, "2026-10-14", "2026-10-17"), null);
+  }
+  assert.equal(physicalReturn(earlier, "2026-10-12", "2026-10-17"), null);
+});
+
+test("consulta el historial antes de descartar una devolución antigua", async () => {
+  const page = await returnsPage(async (path) => {
+    if (path.includes("search?")) return { paging: { total: 1 }, data: [{ id: 1, related_entities: ["return"] }] };
+    if (path.endsWith("/returns")) return { ...raw, date_created: "2026-10-05T12:00:00.000-03:00" };
+    return [{ status: "delivered", date: "2026-10-13T15:00:00.000Z" }];
+  }, "111", "2026-10-12", "2026-10-17", 0);
+  assert.equal(page.returns.length, 1);
+  assert.equal(page.warnings.length, 0);
 });
 test("errores no se presentan como ausencia de devoluciones", async () => {
   const page = await returnsPage(async (path) => {

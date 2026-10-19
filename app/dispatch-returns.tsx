@@ -38,13 +38,13 @@ export default function DispatchReturns({ token, from, to }: { token?: string; f
     return () => controller.abort();
   }, [token, url, period.from, period.to, refresh]);
   return <section className="panel"><div className="panel-title"><h2>Devoluciones del {period.from.split("-").reverse().join("/")} al {period.to.split("-").reverse().join("/")}</h2><button disabled={busy || !token} onClick={() => setRefresh((value) => value + 1)}>Actualizar devoluciones</button></div>
-    <p className="table-note">Devoluciones físicas iniciadas en este período, con su estado actual. No modifican el total ni el resumen del proveedor.</p>
+    <p className="table-note">Devoluciones físicas iniciadas, enviadas o recibidas en este período, aunque se hayan iniciado antes. Se muestra su estado actual. No modifican el total ni el resumen del proveedor.</p>
     {busy && <p className="table-note" role="status">Consultando devoluciones…</p>}
-    {(error || warnings.length > 0) && <div className="warning" role="alert">Consulta incompleta. {error}<details><summary>Ver incidencias ({warnings.length})</summary>{warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details></div>}
-    {!busy && !error && !warnings.length && !rows.length && <p className="table-note">No hay devoluciones físicas iniciadas en este período.</p>}
+    {(error || warnings.length > 0) && <div className="warning" role="alert">Consulta incompleta. {error}{warnings.length > 0 && <details><summary>Ver incidencias ({warnings.length})</summary>{warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details>}</div>}
+    {!busy && !error && !warnings.length && !rows.length && <p className="table-note">No hay devoluciones físicas iniciadas, enviadas o recibidas en este período.</p>}
     {rows.map((row) => <div className="dispatch-day" key={row.id}><h3>Devolución {row.id}</h3><p>Iniciada: {new Date(row.date_created).toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })} · {labels[row.status] || row.status}</p>
       {row.orders.map((order) => <p key={`${order.order_id}:${order.item_id}`}>Orden {order.order_id}{order.item_id && ` · ${order.item_id}`}{order.return_quantity !== undefined && ` · ${order.return_quantity} unidad(es)`}</p>)}
-      {row.shipments.map((shipment) => <p key={shipment.shipment_id}><strong>{labels[shipment.status] || shipment.status}</strong> · {shipment.destination?.name === "warehouse" ? "Depósito de Mercado Libre" : shipment.destination?.name === "seller_address" ? "Domicilio del vendedor" : "Destino sin informar"} · Envío {shipment.shipment_id}{shipment.tracking_number && ` · Seguimiento: ${shipment.tracking_number}`}</p>)}
+      {row.shipments.map((shipment) => <div key={shipment.shipment_id}><p><strong>{labels[shipment.status] || shipment.status}</strong> · {shipment.destination?.name === "warehouse" ? "Depósito de Mercado Libre" : shipment.destination?.name === "seller_address" ? "Domicilio del vendedor" : "Destino sin informar"} · Envío {shipment.shipment_id}{shipment.tracking_number && ` · Seguimiento: ${shipment.tracking_number}`}</p>{shipment.history?.filter((event) => ["shipped", "delivered"].includes(event.status)).map((event, index) => <p key={index}>{event.status === "delivered" ? "Llegada" : "Enviada"}: {new Date(event.date).toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}</p>)}</div>)}
     </div>)}
   </section>;
 }

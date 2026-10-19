@@ -33,7 +33,7 @@ export function applyDispatchNotes(result: DispatchQueryResult, notes: Record<st
 export type DispatchFilters = { from: string; to: string; shipping: string; order: string; reviewOnly: boolean; sort: string };
 export function filterDispatchOrders(result: DispatchQueryResult, filters: DispatchFilters) {
   const reviews = new Set(result.supplier?.orders.filter((o) => o.missing.length || o.review).map((o) => o.orderId));
-  const needsReview = (o: Order) => reviews.has(o.id) || o.cancelled || !!o.review;
+  const needsReview = (o: Order) => reviews.has(o.id) || cancelledDispatch(o) || !!o.review;
   return result.orders.filter((o) => (!filters.from || (o.dispatchedDate ?? "") >= filters.from)
     && (!filters.to || (o.dispatchedDate ?? "") <= filters.to)
     && (!filters.shipping || (o.shippingStatus ?? "unknown") === filters.shipping)

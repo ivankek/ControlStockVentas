@@ -166,7 +166,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
     </div></div>;
   }
   const visibleOrders = result ? filterDispatchOrders(result, filters) : [];
-  const reviewCount = result?.supplier?.orders.filter((o) => !o.excluded && (o.missing.length || o.review)).length ?? 0;
+  const reviewCount = result ? filterDispatchOrders(result, { ...emptyFilters, reviewOnly: true }).length : 0;
   return <>
     <div className="toolbar"><label>Consultar<select value={period ? "range" : "day"} disabled={busy} onChange={(e) => { setPeriod(e.target.value === "range"); setResult(undefined); setCopyStatus(""); }}><option value="day">Un día</option><option value="range">Rango de fechas</option></select></label>
     {period && <label>Desde<input type="date" max={date} value={from} disabled={busy} onChange={(e) => { setFrom(e.target.value); setResult(undefined); setCopyStatus(""); }} /></label>}
@@ -191,7 +191,7 @@ export default function DispatchQuery({ token }: { token?: string }) {
       <DispatchReturns key={result.queriedAt} token={token} from={result.from} to={result.date} />
       {result.supplier && <section className="panel pending"><div className="panel-title"><h2>{result.supplier.complete ? "Total del período al proveedor" : "Subtotal calculable · pendiente de revisión"}</h2><strong>{money(result.supplier.totalCents)}</strong></div>
         <div className="table-wrap"><table><thead><tr><th>FECHA</th><th>PRODUCTO DEL PROVEEDOR</th><th>UNIDADES</th><th>COSTO UNITARIO</th><th>IMPORTE</th></tr></thead><tbody>{result.days?.flatMap((day) => day.supplier.rows.map((r) => <tr key={`${day.date}:${r.id}`}><td>{day.date.split("-").reverse().join("/")}</td><td>{r.name}</td><td>{r.units}</td><td>{money(r.unitCents)}</td><td>{money(r.totalCents)}</td></tr>))}</tbody></table></div>
-        {!result.supplier.complete && <div className="warning">{reviewCount} pedidos necesitan revisión. Cada pedido indica el producto sin asociación, el costo faltante o la incidencia.<button onClick={() => { setFilters({ ...emptyFilters, reviewOnly: true }); detailSection.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Ver pedidos para revisar</button></div>}
+        {reviewCount > 0 && <div className="warning">{reviewCount} pedidos necesitan revisión. Cada pedido indica el producto sin asociación, el costo faltante o la incidencia.<button onClick={() => { setFilters({ ...emptyFilters, reviewOnly: true }); detailSection.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Ver pedidos para revisar</button></div>}
         <p className="table-note">Costo vigente en cada fecha de despacho. No registra pagos ni descuenta pagos anteriores. Solo incluye despachos del período; los pedidos sin fecha verificable quedan fuera.</p>
       </section>}
       <section className="panel" ref={detailSection}><div className="panel-title"><h2>Despachos {result.from !== result.date ? `del ${result.from} al ${result.date}` : `del ${result.date}`}</h2><span className="pill">{visibleOrders.length} de {result.orders.length} pedidos</span></div>

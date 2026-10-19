@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { emptyState, type Order } from "../lib/domain";
 import { emptyBusiness, updateBusiness, businessCommand } from "../lib/business";
 import { supplierReport } from "../lib/supplier";
-import { applyDispatchNotes, dispatchMessage, dispatchQueryResult } from "../lib/dispatch-query";
+import { applyDispatchNotes, dispatchMessage, dispatchQueryResult, filterDispatchOrders } from "../lib/dispatch-query";
 import { GET } from "../app/api/sync/route";
 import { accountFixture } from "./inventory-fixture";
 
@@ -23,6 +23,7 @@ test("canceladas quedan en detalle pero no en unidades, total, incidencias ni re
   assert.equal(result.supplier.totalCents, 2000000);
   assert.equal(result.supplier.rows[0].units, 1);
   assert.equal(result.supplier.complete, true);
+  assert.deepEqual(filterDispatchOrders(result, { from: "", to: "", shipping: "", order: "", reviewOnly: true, sort: "desc" }).map((o) => o.id), ["101"], "El aviso y el filtro conservan la cancelada aunque el total esté completo");
   assert.equal(result.supplier.orders[1].totalCents, 2000000, "Retains cost for viewing and manual inclusion");
   assert.equal(result.supplier.orders[1].excluded, true);
   const text = dispatchMessage(result.days);
