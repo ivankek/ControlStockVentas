@@ -1,8 +1,9 @@
 import { after } from "next/server";
-import { owner, fail } from "@/lib/server";
+import { owner, fail, readState } from "@/lib/server";
 import { today } from "@/lib/domain";
 import { dateSchema } from "@/lib/commands";
-import { accountFor, requestedAccount } from "@/lib/inventory-server";
+import { accountFor, requestedAccount, scopedBusiness } from "@/lib/inventory-server";
+import { applyDispatchNotes } from "@/lib/dispatch-query";
 import { runDispatchQuery } from "@/lib/run-dispatch-query";
 import { executeDispatchJob, readDispatchJob, startDispatchJob } from "@/lib/dispatch-jobs";
 export const maxDuration = 300;
@@ -10,7 +11,16 @@ export async function GET(request: Request) {
   try {
     const id = await owner(request);
     const account = await accountFor(id, requestedAccount(request));
-    return Response.json({ job: await readDispatchJob(id, account.id) }, { headers: { "Cache-Control": "no-store" } });
+    let job = await readDispatchJob(id, account.id);
+    if (job?.status === "done" && job.result) {
+      // Results created before per-order totals cannot be safely recalculated.
+      if (job.result.days?.some((day) => day.supplier.orders.some((order) => !order.rows))) job = null;
+      else {
+        const business = await scopedBusiness(id, account, (await readState(id)).state.business);
+        job = { ...job, result: applyDispatchNotes(job.result, business.notes) };
+      }
+    }
+    return Response.json({ job }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return fail(error); }
 }
 export async function POST(request: Request) {

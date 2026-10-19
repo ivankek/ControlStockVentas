@@ -3,7 +3,7 @@ import { detectFlexZone, FLEX_RATES, FLEX_ZONES, type FlexSelection, type FlexZo
 import { localDate, today, type Order, type State } from "./domain";
 import { daysBetween, type ExpenseCycle, type ExpensePeriod } from "./business-expenses";
 
-export type OrderNote = { accountId?: string; flexBonus?: "included" | "add"; flexZone?: FlexSelection; dispatchedDate?: string; shippingCents?: number; netCents?: number; updatedAt: string };
+export type OrderNote = { accountId?: string; includeCancelledDispatch?: boolean; flexBonus?: "included" | "add"; flexZone?: FlexSelection; dispatchedDate?: string; shippingCents?: number; netCents?: number; updatedAt: string };
 export type Business = {
   flexRates?: Partial<Record<FlexZone, { from: string; cents: number }[]>>;
   notes: Record<string, OrderNote>;
@@ -16,7 +16,7 @@ export const emptyBusiness = (): Business => ({ notes: {}, zones: [], months: {}
 const cents = z.number().int().min(0).max(100000000000);
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 export const businessCommand = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("note"), id: z.string().regex(/^\d+$/), flexBonus: z.enum(["included", "add"]).nullable().optional(), flexZone: z.enum([...FLEX_ZONES, "NONE"]).nullable().optional(), dispatchedDate: z.iso.date().nullable().optional(), shippingCents: cents.nullable().optional(), netCents: cents.nullable().optional() }),
+  z.object({ type: z.literal("note"), id: z.string().regex(/^\d+$/), includeCancelledDispatch: z.boolean().nullable().optional(), flexBonus: z.enum(["included", "add"]).nullable().optional(), flexZone: z.enum([...FLEX_ZONES, "NONE"]).nullable().optional(), dispatchedDate: z.iso.date().nullable().optional(), shippingCents: cents.nullable().optional(), netCents: cents.nullable().optional() }),
   z.object({ type: z.literal("expenseCycle"), startDay: z.number().int().min(1).max(31), endDay: z.number().int().min(1).max(31), startMonth: month }),
   z.object({ type: z.literal("expensePeriod"), month, from: z.iso.date(), to: z.iso.date(), mlCents: cents, monotributoCents: cents, iibbCents: cents, otherCents: cents, note: z.string().trim().max(500) }).refine((p) => p.from <= p.to && daysBetween(p.from, p.to) <= 62 && p.from.slice(0, 7) === p.month, "Revisá las fechas del período (hasta 62 días, dentro del mes de inicio seleccionado)."),
   z.object({ type: z.literal("expenseDelete"), month }),
@@ -35,7 +35,7 @@ export function updateBusiness(state: State, action: z.infer<typeof businessComm
     const note = business.notes[action.id] ?? { updatedAt: "" };
     if (action.flexZone !== undefined && order.mode !== "flex") throw Error("La zona Flex solo se aplica a envíos Flex.");
     if (action.flexBonus !== undefined && order.mode !== "flex") throw Error("La confirmación de bonificación solo se aplica a Flex.");
-    for (const key of ["dispatchedDate", "shippingCents", "netCents", "flexZone", "flexBonus"] as const) {
+    for (const key of ["dispatchedDate", "shippingCents", "netCents", "flexZone", "flexBonus", "includeCancelledDispatch"] as const) {
       const value = action[key];
       if (value === null) delete note[key];
       else if (value !== undefined) Object.assign(note, { [key]: value });

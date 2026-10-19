@@ -20,7 +20,7 @@ function UnitsField({ initial }: { initial: number }) {
 const statuses: Record<string, string> = { active: "Activa", paused: "Pausada", closed: "Finalizada", under_review: "En revisión", inactive: "Inactiva", payment_required: "Pago pendiente", not_yet_active: "Pendiente de activación" };
 export default function Listings({ token }: { token?: string }) {
   const path = useAccountPath();
-  const { account, data: inventory } = useInventory();
+  const { account, data: inventory, command } = useInventory();
   const [items, setItems] = useViewState<Listing[]>("app/listings.tsx:items", []);
   const [products, setProducts] = useViewState<Product[]>("app/listings.tsx:products", []);
   const [links, setLinks] = useViewState<NonNullable<State["supplierLinks"]>>("app/listings.tsx:links", {});
@@ -40,6 +40,9 @@ export default function Listings({ token }: { token?: string }) {
       const response = await fetch(path("/api/listings"), { method: update ? "POST" : "GET", headers: { Authorization: `Bearer ${token}` }, signal: controller.signal, cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw Error(data.error || "No se pudieron consultar las publicaciones.");
+      // Association labels and editors use the shared inventory snapshot,
+      // not the links returned by /listings. Refresh it before exposing new IDs.
+      await command();
       if (controller.signal.aborted) return;
       setItems(data.listings);
       setProducts(data.products ?? []); setLinks(data.links ?? {});

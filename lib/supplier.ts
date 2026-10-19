@@ -52,9 +52,11 @@ export function updateSupplier(state: State, raw: unknown): State {
   return next;
 }
 
-export function supplierReport(state: State, orders: Order[], date: string) {
-  const rows = new Map<string, { id: string; name: string; units: number; unitCents: number; totalCents: number }>();
+export type SupplierRow = { id: string; name: string; units: number; unitCents: number; totalCents: number };
+export const cancelledDispatch = (order: Order) => order.cancelled || order.orderStatus === "cancelled" || order.shippingStatus === "cancelled";
+export function supplierReport(state: State, orders: Order[], date: string, dispatch = false) {
   const details = orders.map((order) => {
+    const rows = new Map<string, SupplierRow>();
     const missing: string[] = [];
     const products: string[] = [];
     let totalCents = 0;
@@ -77,9 +79,24 @@ export function supplierReport(state: State, orders: Order[], date: string) {
       row.units += units; row.totalCents += subtotal; rows.set(product.id, row);
     }
     const reviewReasons = [...(order.cancelled ? ["Venta cancelada"] : []), ...(order.review ? [order.review] : [])];
-    return { orderId: order.id, products, totalCents, missing, review: !!order.cancelled || !!order.review, reviewReasons };
+    return { orderId: order.id, products, totalCents, missing, review: !!order.cancelled || !!order.review, reviewReasons, rows: [...rows.values()], excluded: dispatch && cancelledDispatch(order) && state.business?.notes[order.id]?.includeCancelledDispatch !== true };
   });
-  const totalCents = details.reduce((sum, d) => sum + d.totalCents, 0);
+  if (dispatch) for (const detail of details) {
+    if (state.business?.notes[detail.orderId]?.includeCancelledDispatch === true) {
+      detail.reviewReasons = detail.reviewReasons.filter((reason) => reason !== "Venta cancelada" && reason !== "Cancelación posterior al despacho: revisar ajuste");
+      detail.review = detail.reviewReasons.length > 0;
+    }
+  }
+  return summarizeSupplierOrders(details);
+}
+export function summarizeSupplierOrders(details: { orderId: string; products: string[]; totalCents: number; missing: string[]; review: boolean; reviewReasons: string[]; rows: SupplierRow[]; excluded: boolean }[]) {
+  const included = details.filter((d) => !d.excluded);
+  const rows = new Map<string, SupplierRow>();
+  for (const detail of included) for (const item of detail.rows) {
+    const row = rows.get(item.id) ?? { ...item, units: 0, totalCents: 0 };
+    row.units += item.units; row.totalCents += item.totalCents; rows.set(item.id, row);
+  }
+  const totalCents = included.reduce((sum, d) => sum + d.totalCents, 0);
   if (!Number.isSafeInteger(totalCents)) throw Error("El total supera el límite permitido.");
-  return { rows: [...rows.values()], orders: details, totalCents, complete: details.every((d) => !d.missing.length && !d.review) };
+  return { rows: [...rows.values()], orders: details, totalCents, complete: included.every((d) => !d.missing.length && !d.review) };
 }

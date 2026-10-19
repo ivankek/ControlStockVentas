@@ -4,10 +4,12 @@ import { useAccountPath, useInventory } from "./inventory-context";
 import { useEffect, useRef, useState } from "react";
 import { today, money } from "@/lib/domain";
 import type { Order } from "@/lib/domain";
-import { dispatchMessage, filterDispatchOrders, type DispatchFilters, type DispatchQueryResult } from "@/lib/dispatch-query";
+import { applyDispatchNotes, dispatchDayTitle, dispatchMessage, filterDispatchOrders, type DispatchFilters, type DispatchQueryResult } from "@/lib/dispatch-query";
+import { cancelledDispatch } from "@/lib/supplier";
 import { FLEX_LABELS } from "@/lib/flex-zones";
 import type { DispatchJob } from "@/lib/dispatch-jobs";
 import OrderNoteEditor from "./order-note";
+import DispatchReturns from "./dispatch-returns";
 
 const statuses: Record<string, string> = {
   pending: "Pendiente", handling: "En preparación", ready_to_ship: "Listo para enviar",
@@ -47,6 +49,8 @@ export default function DispatchQuery({ token }: { token?: string }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  const [savingCancellation, setSavingCancellation] = useState<string>();
+  const [cancellationError, setCancellationError] = useState("");
   const emptyFilters: DispatchFilters = { from: "", to: "", shipping: "", order: "", reviewOnly: false, sort: "desc" };
   const [filters, setFilters] = useViewState<DispatchFilters>("app/dispatch-query.tsx:filters", emptyFilters);
   const [modalDay, setModalDay] = useState<string>();
@@ -122,6 +126,18 @@ export default function DispatchQuery({ token }: { token?: string }) {
     try { await navigator.clipboard.writeText(dispatchMessage(result.days ?? [])); setCopyStatus("Resumen copiado. Ya podés enviárselo al proveedor."); }
     catch { setCopyStatus("No se pudo copiar automáticamente. Seleccioná y copiá el texto del resumen."); }
   }
+  async function toggleCancelled(order: Order) {
+    if (!token || !result || savingCancellation) return;
+    const included = result.notes?.[order.id]?.includeCancelledDispatch === true;
+    setSavingCancellation(order.id); setCancellationError("");
+    try {
+      const response = await fetch(accountPath("/api/business"), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ type: "note", id: order.id, includeCancelledDispatch: !included }) });
+      const data = await response.json(); if (!response.ok) throw Error(data.error || "No se pudo guardar la inclusión.");
+      setResult((current) => current ? applyDispatchNotes(current, { ...current.notes, [order.id]: { ...current.notes?.[order.id], includeCancelledDispatch: !included, updatedAt: new Date().toISOString() } }) : current);
+      setCopyStatus("");
+    } catch (e) { setCancellationError((e as Error).message); }
+    finally { setSavingCancellation(undefined); }
+  }
   function row(o: Order) {
     const cost = result?.supplier?.orders.find((entry) => entry.orderId === o.id);
     const mode = o.mode === "flex" ? "Flex" : o.mode === "correo" ? "Mercado Envíos · correo" : "Acordar con el comprador / personalizado";
@@ -145,11 +161,12 @@ export default function DispatchQuery({ token }: { token?: string }) {
       {(o.mode === "acordar" || o.mode === "flex") && <OrderNoteEditor key={`${o.id}-${result?.notes?.[o.id]?.updatedAt}`} order={o} note={result?.notes?.[o.id]} token={token} onSaved={() => void consult()} />}
       {o.review && <small>{o.review}</small>}
       {cost && <p><strong>{cost.missing.length && !cost.totalCents ? "Costo del proveedor pendiente" : `${cost.missing.length || cost.review ? "Costo parcial / a revisar" : "Costo del proveedor"}: ${money(cost.totalCents)}`}</strong></p>}
+      {cancelledDispatch(o) && cost && <div className="notice"><p>{cost.excluded ? "Cancelada: no cuenta en el total ni en el resumen para el proveedor." : "Cancelada incluida manualmente en el total y en el resumen para el proveedor."}</p><button disabled={busy || !!savingCancellation || !token} onClick={() => void toggleCancelled(o)}>{savingCancellation === o.id ? "Guardando…" : cost.excluded ? "Incluir en total y resumen" : "Excluir del total y resumen"}</button>{cancellationError && <p role="alert">{cancellationError}</p>}</div>}
       {!!cost?.missing.length && <div className="dispatch-issues"><strong>Falta completar:</strong><ul>{cost.missing.map((text) => <li key={text}>{text}</li>)}</ul></div>}
     </div></div>;
   }
   const visibleOrders = result ? filterDispatchOrders(result, filters) : [];
-  const reviewCount = result?.supplier?.orders.filter((o) => o.missing.length || o.review).length ?? 0;
+  const reviewCount = result?.supplier?.orders.filter((o) => !o.excluded && (o.missing.length || o.review)).length ?? 0;
   return <>
     <div className="toolbar"><label>Consultar<select value={period ? "range" : "day"} disabled={busy} onChange={(e) => { setPeriod(e.target.value === "range"); setResult(undefined); setCopyStatus(""); }}><option value="day">Un día</option><option value="range">Rango de fechas</option></select></label>
     {period && <label>Desde<input type="date" max={date} value={from} disabled={busy} onChange={(e) => { setFrom(e.target.value); setResult(undefined); setCopyStatus(""); }} /></label>}
@@ -168,9 +185,10 @@ export default function DispatchQuery({ token }: { token?: string }) {
       <p className="table-note">Estados consultados: {new Date(result.queriedAt).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}. <button disabled={busy} onClick={() => void consult()}>Actualizar estados</button></p>
       <details className="dispatch-coverage"><summary>Cómo se buscan los despachos y qué puede quedar fuera</summary><p>{result.warning}</p><p>Por ejemplo: una compra del viernes despachada el lunes debe aparecer al consultar el lunes. La búsqueda de órdenes usa la fecha de compra y luego comprobamos la fecha del envío.</p></details>
       {!!result.orders.length && <section className="panel dispatch-copy"><div className="panel-title"><h2>Resumen para el proveedor</h2><button className="primary" onClick={() => void copy()}>Copiar resumen</button></div>
-        {result.days?.map((day) => <div className="dispatch-day" key={day.date}><div className="dispatch-heading"><h3>{dispatchMessage([day]).split("\n")[0]}</h3><button onClick={() => setModalDay(day.date)}>Ver envíos ({result.orders.filter((o) => o.dispatchedDate === day.date).length})</button></div><pre>{dispatchMessage([day]).split("\n").slice(1).join("\n")}</pre></div>)}
+        {result.days?.map((day) => <div className="dispatch-day" key={day.date}><div className="dispatch-heading"><h3>{dispatchDayTitle(day.date)}</h3><button onClick={() => setModalDay(day.date)}>Ver envíos ({result.orders.filter((o) => o.dispatchedDate === day.date).length})</button></div><pre>{dispatchMessage([day]).split("\n").slice(1).join("\n")}</pre></div>)}
         <p className="table-note"><strong>{result.supplier?.complete ? "Total" : "Subtotal parcial"}: {money(result.supplier?.totalCents ?? 0)}</strong></p>{copyStatus && <p role="status">{copyStatus}</p>}
       </section>}
+      <DispatchReturns key={result.queriedAt} token={token} from={result.from} to={result.date} />
       {result.supplier && <section className="panel pending"><div className="panel-title"><h2>{result.supplier.complete ? "Total del período al proveedor" : "Subtotal calculable · pendiente de revisión"}</h2><strong>{money(result.supplier.totalCents)}</strong></div>
         <div className="table-wrap"><table><thead><tr><th>FECHA</th><th>PRODUCTO DEL PROVEEDOR</th><th>UNIDADES</th><th>COSTO UNITARIO</th><th>IMPORTE</th></tr></thead><tbody>{result.days?.flatMap((day) => day.supplier.rows.map((r) => <tr key={`${day.date}:${r.id}`}><td>{day.date.split("-").reverse().join("/")}</td><td>{r.name}</td><td>{r.units}</td><td>{money(r.unitCents)}</td><td>{money(r.totalCents)}</td></tr>))}</tbody></table></div>
         {!result.supplier.complete && <div className="warning">{reviewCount} pedidos necesitan revisión. Cada pedido indica el producto sin asociación, el costo faltante o la incidencia.<button onClick={() => { setFilters({ ...emptyFilters, reviewOnly: true }); detailSection.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Ver pedidos para revisar</button></div>}

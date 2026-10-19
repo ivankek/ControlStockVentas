@@ -15,7 +15,7 @@ export async function runDispatchQuery(id: string, account: Awaited<ReturnType<t
     const result = await importOrders(id, previous, selected, account.id, start, progress);
     const query = dispatchQueryResult({ ...result, orders: manualDispatches(result.orders, state.business) }, selected, start);
     state.products = result.products;
-    const days = [...new Set(query.orders.map((o) => o.dispatchedDate!))].sort().map((day) => ({ date: day, supplier: supplierReport(state, query.orders.filter((o) => o.dispatchedDate === day), day) }));
+    const days = [...new Set(query.orders.map((o) => o.dispatchedDate!))].sort().map((day) => ({ date: day, supplier: supplierReport(state, query.orders.filter((o) => o.dispatchedDate === day), day, true) }));
     const supplier = { rows: days.flatMap((d) => d.supplier.rows), orders: days.flatMap((d) => d.supplier.orders), totalCents: days.reduce((sum, d) => sum + d.supplier.totalCents, 0), complete: days.every((d) => d.supplier.complete) };
     const flex = resolveFlexShipments(state.business, result.orders);
 
