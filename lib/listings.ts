@@ -2,7 +2,10 @@ import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
 
 const quantity = z.number().int().nonnegative();
+const skuAttributes = z.array(z.object({ id: z.string(), value_name: z.string().nullish() })).optional();
 const variationSchema = z.object({
+  attributes: skuAttributes,
+  seller_custom_field: z.string().nullish(),
   id: z.union([z.number().int().safe(), z.string()]).transform(String),
   price: z.number().nonnegative(),
   available_quantity: quantity,
@@ -11,6 +14,8 @@ const variationSchema = z.object({
   })).default([]),
 });
 const itemSchema = z.object({
+  attributes: skuAttributes,
+  seller_custom_field: z.string().nullish(),
   id: z.string().regex(/^[A-Z]+\d+$/),
   seller_id: z.number().int().safe(),
   user_product_id: z.string().nullish(),

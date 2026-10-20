@@ -8,6 +8,7 @@ import ListingBinding from "./listing-binding";
 import { useAccountPath, useInventory } from "./inventory-context";
 import { installmentLabel } from "@/lib/sale-option";
 import { listingView, type AssociationFilter, type ListingSort } from "@/lib/listing-view";
+import { skuMessage } from "@/lib/sku";
 function UnitsField({ initial }: { initial: number }) {
   const [editing, setEditing] = useState(false);
   const [units, setUnits] = useState(String(initial));
@@ -51,6 +52,17 @@ export default function Listings({ token }: { token?: string }) {
     finally { if (!controller.signal.aborted) setBusy(false); }
   }
   const visible = listingView(items, inventory?.mappings ?? [], inventory?.variants ?? [], account, filter, association, sort);
+  async function syncSku() {
+    if (!token || !account) return;
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch(path("/api/listings/sku"), { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json(); if (!response.ok) throw Error(data.error);
+      await request(false);
+      setMessage(skuMessage(data));
+    } catch (e) { setMessage(e instanceof Error ? e.message : "No se pudieron asociar los SKU."); }
+    finally { setBusy(false); }
+  }
   const price = (amount: number, currency: string) => {
     try { return new Intl.NumberFormat("es-AR", { style: "currency", currency }).format(amount); }
     catch { return `${amount} ${currency}`; }
@@ -60,6 +72,7 @@ export default function Listings({ token }: { token?: string }) {
       <label>Asociación<select value={association} onChange={(e) => setAssociation(e.target.value as AssociationFilter)}><option value="all">Todas</option><option value="none">Sin asociar</option><option value="partial">Parcialmente asociadas</option><option value="complete">Asociadas</option></select></label>
       <label>Ordenar<select value={sort} onChange={(e) => setSort(e.target.value as ListingSort)}><option value="original">Orden original</option><option value="unlinked">Sin asociar primero</option><option value="title">Título A–Z</option><option value="title-desc">Título Z–A</option><option value="stock">Menor stock primero</option><option value="stock-desc">Mayor stock primero</option><option value="price">Menor precio primero</option><option value="price-desc">Mayor precio primero</option></select></label>
       <button className="primary" disabled={!token || !account || busy} onClick={() => void request(true)}>{busy ? "Consultando…" : items.length ? "Actualizar publicaciones" : "Importar publicaciones"}</button>
+      <button disabled={!token || !account || busy} onClick={() => void syncSku()}>Sincronizar SKU</button>
     </div>
     <p className="table-note">Las publicaciones se guardan en tu cuenta. Cada ID aparece una sola vez: solo se agregan las nuevas y se actualizan los datos que cambiaron. Los precios son de venta, no costos del proveedor.</p>
     {!token && <p className="warning">Iniciá sesión y conectá Mercado Libre para importar tus publicaciones.</p>}

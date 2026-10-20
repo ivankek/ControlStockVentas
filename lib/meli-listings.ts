@@ -28,7 +28,7 @@ export async function fetchListings(owner: string, accountId?: string): Promise<
   for (let offset = 0; offset < list.length; offset += 5) {
     // Wait for the whole batch, including failures, before releasing the import lock.
     const batch = await Promise.allSettled(list.slice(offset, offset + 5).map(async (id) => {
-      const item = normalizeListing(await get(`/items/${id}`, tokens.access_token), tokens.user_id);
+      const item = normalizeListing(await get(`/items/${id}?include_attributes=all`, tokens.access_token), tokens.user_id);
       if (item.id !== id) throw Error("La publicación recibida no coincide con la solicitada.");
       return item;
     }));

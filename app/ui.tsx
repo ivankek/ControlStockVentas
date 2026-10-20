@@ -6,7 +6,8 @@ import Users from "./users";
 import { InventoryContext } from "./inventory-context";
 import type { InventorySnapshot } from "@/lib/inventory";
 import DispatchQuery from "./dispatch-query";
-import Listings from "./listings";
+import PlatformListings from "./platform-listings";
+import TiendanubeConnection from "./tiendanube-connection";
 import BusinessCosts from "./business-costs";
 import Profits from "./profits";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -368,7 +369,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                 {tab === "Despachos"
                   ? "Revisá qué salió y cuánto tenés que pagarle a tu proveedor."
                   : tab === "Publicaciones"
-                    ? "Importá y actualizá el catálogo de tu cuenta de Mercado Libre."
+                    ? "Importá y asociá los catálogos de tus cuentas conectadas."
                   : tab === "Costos"
                     ? "El precio que te cobra tu proveedor por cada unidad vendida."
                   : tab === "Stock"
@@ -412,11 +413,11 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               </button>
             </div>
           )}
-          {inventory && ["Despachos", "Publicaciones", "Ganancias"].includes(tab) && <div className="toolbar"><label>Cuenta Mercado Libre<select aria-label="Cuenta Mercado Libre" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">Seleccionar cuenta</option>{ownAccounts.map((a) => <option value={a.id} key={a.id}>{a.nickname ?? "Cuenta ML"} · {a.seller_id}</option>)}</select></label>{!ownAccounts.length && <span>Conectá una cuenta desde Conexión.</span>}</div>}
+          {inventory && ["Despachos", "Ganancias"].includes(tab) && <div className="toolbar"><label>Cuenta Mercado Libre<select aria-label="Cuenta Mercado Libre" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">Seleccionar cuenta</option>{ownAccounts.map((a) => <option value={a.id} key={a.id}>{a.nickname ?? "Cuenta ML"} · {a.seller_id}</option>)}</select></label>{!ownAccounts.length && <span>Conectá una cuenta desde Conexión.</span>}</div>}
           {!demo && <StockSync token={token} revision={stockRevision} onUpdated={() => void inventoryCommand()} />}
           {tab === "Stock" && <Stock />}
           {tab === "Usuarios" && <Users />}
-          {tab === "Publicaciones" && <Listings key={account} token={account ? token : undefined} />}
+          {tab === "Publicaciones" && <PlatformListings token={token} />}
           {canViewFinance && tab === "Gastos del negocio" && <BusinessCosts key={account} token={token} />}
           {canViewFinance && tab === "Ganancias" && <Profits key={account} token={account ? token : undefined} />}
           {tab === "Despachos" && !demo && <DispatchQuery key={account} token={account ? token : undefined} />}
@@ -938,7 +939,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                   {connected ? "Conectar otra cuenta / renovar" : "Conectar Mercado Libre"}
                   <ArrowUpRight size={16} />
                 </button>
-                <h3>3. Costos del proveedor</h3>
+                <TiendanubeConnection token={token} />
+                <h3>4. Costos del proveedor</h3>
                 <p>
                   La consulta por fecha es temporal. Los pedidos consultados no se guardan ni se incorporan a Costos o Liquidaciones.
                 </p>

@@ -776,3 +776,7 @@ h1 { margin-bottom: 6px; font-size: 30px; }
   .profit-grid-controls { padding: 14px 16px; }
   .profit-grid-controls label, .profit-grid-controls input, .profit-grid-controls select { width: 100%; min-width: 0; }
 }
+.platform-section { margin: 24px 0 40px; }
+.platform-title { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line, #dce5e3); }
+.platform-title img { object-fit: contain; flex: 0 0 32px; }
+.nube-connection { margin: 24px 0; }
