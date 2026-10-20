@@ -149,12 +149,15 @@ export default function Dashboard({ configured }: { configured: boolean }) {
     return () => subscription.unsubscribe();
   }, [supabase]);
   useEffect(() => {
-    const result = new URLSearchParams(location.search).get("connection");
+    const params = new URLSearchParams(location.search);
+    const result = params.get("connection");
     if (result) {
       setTab("Conexión");
       setMessage(
         result === "ok"
-          ? "Mercado Libre conectado. Ya podés consultar tus despachos por fecha."
+          ? params.get("platform") === "tiendanube"
+            ? "Tiendanube conectada. Ya podés importar sus publicaciones y asociarlas por SKU."
+            : "Mercado Libre conectado. Ya podés consultar tus despachos por fecha."
           : "No se pudo completar la autorización. Volvé a conectar.",
       );
       history.replaceState(null, "", "/");

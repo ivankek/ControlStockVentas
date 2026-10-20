@@ -15,22 +15,21 @@ export default function TiendanubeConnection({ token }: { token?: string }) {
   }, [token]);
   return <div className="nube-connection"><h3>3. Tiendanube</h3>
     {accounts.map((a) => <div className="account-card" key={a.id}><strong>{a.name}</strong><p>Conectada · ID de tienda: {a.store_id}</p></div>)}
-    <p>Conectá tu aplicación a medida con acceso de lectura a productos. Para renovar el acceso de una tienda, ingresá su mismo ID y el token nuevo.</p>
+    <p>Autorizá a Despachos desde Tiendanube. El ID de tu tienda y el acceso se guardan automáticamente.</p>
     <form className="toolbar" onSubmit={async (event) => {
-      event.preventDefault(); const form = event.currentTarget, values = new FormData(form);
+      event.preventDefault();
       setBusy(true); setMessage("");
       try {
-        const response = await fetch("/api/tiendanube", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ storeId: values.get("storeId"), token: values.get("accessToken") }) });
+        const response = await fetch("/api/tiendanube/connect", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
         const data = await response.json(); if (!response.ok) throw Error(data.error);
-        setAccounts(data.accounts); form.reset(); setMessage("Tiendanube conectada. Ya podés importar sus publicaciones.");
+        window.location.assign(data.url);
       } catch (e) { setMessage(e instanceof Error ? e.message : "No se pudo conectar."); }
       finally { setBusy(false); }
     }}>
-      <label>ID de tienda<input name="storeId" inputMode="numeric" pattern="[0-9]+" required disabled={busy || !token} /></label>
-      <label>Token de acceso<input name="accessToken" type="password" autoComplete="off" required disabled={busy || !token} /></label>
       <button className="primary" disabled={busy || !token}>{busy ? "Conectando…" : "Conectar Tiendanube / renovar"}</button>
     </form>
     <p className="table-note">El token se guarda cifrado y no se muestra al consultar la conexión.</p>
+    <p className="table-note">Esta conexión permite importar publicaciones y asociarlas por SKU. Las ventas de Tiendanube todavía no descuentan el stock compartido.</p>
     {message && <p className="notice" role="status">{message}</p>}
   </div>;
 }
