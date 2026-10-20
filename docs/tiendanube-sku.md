@@ -24,7 +24,9 @@ La comparación usa el SKU de cada variante y el SKU del producto del proveedor 
 
 Solo se escriben asociaciones con una coincidencia única. Un SKU vacío, desconocido o compartido por varios productos del proveedor conserva la asociación anterior. Una coincidencia única puede reemplazar una asociación previa. En Mercado Libre se conservan las unidades por venta y se utiliza la cola de stock existente.
 
-Esta integración de Tiendanube importa publicaciones y guarda asociaciones. No envía stock ni importa ventas de Tiendanube.
+Esta integración importa publicaciones, guarda asociaciones y envía el stock del proveedor a cada variante asociada. Una unidad de la variante corresponde a una unidad del producto del proveedor. Tanto las asociaciones manuales y por SKU como los cambios de stock generan trabajos durables. El servidor intenta enviarlos después de guardar y el worker programado recupera pendientes y errores aunque el navegador esté cerrado. El cron actual corre una vez por hora. Un envío fallido queda visible en Publicaciones; un 401/403 requiere revisar escritura de productos y reconectar.
+
+La migración `20261020211606_tiendanube_stock_sync.sql` agrega esa cola privada, genera los trabajos iniciales para las asociaciones existentes y registra los cambios de inventario. Las revisiones y los bloqueos temporales impiden que una respuesta antigua marque como terminado un cambio más reciente. El stock remoto solo se muestra como confirmado después de consultarlo en Tiendanube. La integración todavía no importa ventas de Tiendanube ni las descuenta del stock compartido.
 
 La migración `20261020134220_tiendanube_catalog_sku.sql` agrega la tabla privada de conexiones y catálogos y las funciones de guardado. Las escrituras verifican propietario y versión; una importación fallida no reemplaza el catálogo guardado.
 

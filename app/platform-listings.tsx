@@ -11,7 +11,7 @@ function PlatformTitle({ platform }: { platform: "meli" | "nube" }) {
 }
 function NubeListings({ account, token }: { account: NubeAccount; token: string }) {
   const { data: inventory } = useInventory();
-  const [catalog, setCatalog] = useState<NubeCatalog>({ products: [], links: {}, version: 0 });
+  const [catalog, setCatalog] = useState<NubeCatalog & { stockSync?: { listing_key: string; status: string; error: string | null; confirmed_stock: number | null }[] }>({ products: [], links: {}, version: 0 });
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [filter, setFilter] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   async function associate(key: string, variantId: string) {
@@ -23,12 +23,12 @@ function NubeListings({ account, token }: { account: NubeAccount; token: string 
       });
       const data = await response.json(); if (!response.ok) throw Error(data.error);
       setCatalog(data); setDrafts((previous) => { const next = { ...previous }; delete next[key]; return next; });
-      setMessage("Asociación guardada.");
+      setMessage("Asociación guardada. El stock se actualizará en Tiendanube.");
     } catch (e) { setMessage(e instanceof Error ? e.message : "No se pudo guardar la asociación."); }
     finally { setBusy(false); }
   }
-  async function request(action?: "refresh" | "sku", signal?: AbortSignal) {
-    setBusy(true); setMessage("");
+  async function request(action?: "refresh" | "sku", signal?: AbortSignal, quiet = false) {
+    if (!quiet) { setBusy(true); setMessage(""); }
     try {
       const response = await fetch(`/api/tiendanube/listings?account=${encodeURIComponent(account.id)}`, {
         method: action ? "POST" : "GET", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -39,9 +39,15 @@ function NubeListings({ account, token }: { account: NubeAccount; token: string 
       setCatalog(data);
       if (action) setMessage(action === "sku" ? skuMessage(data) : `${data.products.length} publicaciones actualizadas.`);
     } catch (e) { if (!signal?.aborted) setMessage(e instanceof Error ? e.message : "No se pudo consultar Tiendanube."); }
-    finally { if (!signal?.aborted) setBusy(false); }
+    finally { if (!signal?.aborted && !quiet) setBusy(false); }
   }
   useEffect(() => { const controller = new AbortController(); void request(undefined, controller.signal); return () => controller.abort(); }, [account.id, token]);
+  useEffect(() => {
+    if (busy) return;
+    const controller = new AbortController();
+    const timer = setInterval(() => { if (document.visibilityState === "visible") void request(undefined, controller.signal, true); }, 10000);
+    return () => { clearInterval(timer); controller.abort(); };
+  }, [account.id, token, busy]);
   const query = filter.trim().toLocaleLowerCase("es");
   const visible = catalog.products.filter((p) => `${p.title} ${p.id} ${p.variants.map((v) => v.sku).join(" ")}`.toLocaleLowerCase("es").includes(query));
   return <div><h3>{account.name} · {account.store_id}</h3>
@@ -56,6 +62,7 @@ function NubeListings({ account, token }: { account: NubeAccount; token: string 
         {p.variants.map((v) => {
           const linked = catalog.links[`${p.id}:${v.id}`], supplier = inventory?.variants.find((x) => x.id === linked);
           const key = `${p.id}:${v.id}`, selected = drafts[key] ?? linked ?? "";
+          const sync = catalog.stockSync?.find((job) => job.listing_key === key);
           return <div className="pending-row" key={v.id}><div className="order-text"><strong>{v.title || "Variante única"}</strong><p>Producto {p.id} · Variante {v.id} · SKU: {v.sku || "Sin SKU"}</p><p>Precio: {v.price ?? "Sin informar"} · Stock: {v.stock ?? "Sin límite"}</p><p>{supplier ? `Asociada · ${supplier.product_name}${supplier.name === "Única" ? "" : ` · ${supplier.name}`}` : linked ? "Asociada · producto del proveedor no disponible" : "Sin producto asociado"}</p>
             <form className="toolbar nube-association" onSubmit={(event) => { event.preventDefault(); if (selected) void associate(key, selected); }}>
               <label>Producto / variante del proveedor<select value={selected} disabled={busy || !inventory} onChange={(event) => setDrafts((previous) => ({ ...previous, [key]: event.target.value }))}>
@@ -65,6 +72,7 @@ function NubeListings({ account, token }: { account: NubeAccount; token: string 
               </select></label>
               <button disabled={busy || !selected || selected === linked || !inventory?.variants.some((variant) => variant.id === selected)}>Guardar asociación</button>
             </form>
+            {linked && <p role="status" className={sync?.status === "error" ? "warning" : "stock-sync-note"}>{sync?.status === "error" ? sync.error : sync?.status === "done" ? `Stock confirmado en Tiendanube: ${sync.confirmed_stock}` : "Actualización de stock pendiente…"}</p>}
             {inventory && !inventory.variants.length && <p>No hay productos disponibles. Agregalos desde Stock para poder asociarlos.</p>}
           </div></div>;
         })}

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { admin } from "./server";
 import { access } from "./meli";
+import { syncNextNubeStock } from "./tiendanube-stock";
 
 export type StockTarget = { variationId: string; stock: number };
 type Job = { accountId: string; ownerId: string; sellerId: string; itemId: string; revision: number; lease: string; targets: StockTarget[] };
@@ -90,7 +91,9 @@ export async function syncPendingStock(actor: string) {
   const deadline = Date.now() + 90000;
   let processed = 0;
   while (Date.now() < deadline && processed < 100) {
-    if (!await syncNextStock(actor)) break;
+    const meli = await syncNextStock(actor);
+    const nube = Date.now() < deadline ? await syncNextNubeStock(actor) : false;
+    if (!meli && !nube) break;
     processed++;
   }
   return processed;

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { admin } from "./server";
 import { access } from "./meli";
 import { syncNextStock } from "./stock-sync";
+import { syncNextNubeStock } from "./tiendanube-stock";
 
 const id = z.union([z.number().int().positive().safe(), z.string().regex(/^[1-9]\d{0,31}$/)]).transform(String);
 const variationId = z.union([z.number().int().nonnegative().safe(), z.string().regex(/^(0|[1-9]\d{0,31})$/)]).transform(String);
@@ -59,14 +60,16 @@ export async function processNextSale() {
 // Database leases allow concurrent webhook/cron runs; expired claims are recovered.
 export async function runStockWorker() {
   const deadline = Date.now() + 45000;
-  let sales = 0, listings = 0;
+  let sales = 0, listings = 0, tiendanube = 0;
   for (let i = 0; i < 20 && Date.now() < deadline; i++) {
     const sale = await processNextSale();
     if (sale) sales++;
     if (Date.now() >= deadline) break;
     const listing = await syncNextStock(null);
     if (listing) listings++;
-    if (!sale && !listing) break;
+    const nube = Date.now() < deadline ? await syncNextNubeStock(null) : false;
+    if (nube) tiendanube++;
+    if (!sale && !listing && !nube) break;
   }
-  return { sales, listings };
+  return { sales, listings, tiendanube };
 }
