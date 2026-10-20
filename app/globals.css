@@ -777,6 +777,13 @@ h1 { margin-bottom: 6px; font-size: 30px; }
   .profit-grid-controls label, .profit-grid-controls input, .profit-grid-controls select { width: 100%; min-width: 0; }
 }
 .platform-section { margin: 24px 0 40px; }
+.platform-section[hidden] { display: none; }
+.platform-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--line, #dce5e3); margin-top: 24px; overflow-x: auto; }
+.platform-tabs button { display: flex; align-items: center; gap: 10px; flex-shrink: 0; border: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; padding: 12px 18px; background: transparent; }
+.platform-tabs button[aria-selected="true"] { background: #e8f2ef; border-bottom-color: #00453e; font-weight: 700; }
+.platform-tabs img { object-fit: contain; }
+.nube-association label { flex: 1; min-width: 200px; }
+.nube-association select { width: 100%; max-width: 100%; }
 .platform-title { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line, #dce5e3); }
 .platform-title img { object-fit: contain; flex: 0 0 32px; }
 .nube-connection { margin: 24px 0; }
