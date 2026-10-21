@@ -47,24 +47,39 @@ export async function saveTokens(id: string, tokens: Tokens) {
 }
 export async function access(id: string, accountId?: string) {
   const account = await accountFor(id, accountId);
+  return accessOwned(id, account.id, account.seller_id);
+}
+// Suppliers may read a seller's account only while the explicit relationship is active.
+// Refresh leases remain owned by the seller so existing token-refresh permissions stay intact.
+export async function accessLinkedSupplier(supplierId: string, sellerId: string, accountId: string) {
+  const db = admin();
+  const [relation, result] = await Promise.all([
+    db.from("supplier_sellers").select("seller_user_id").eq("supplier_id", supplierId).eq("seller_user_id", sellerId).eq("active", true).maybeSingle(),
+    db.from("meli_accounts").select("id,seller_id").eq("id", accountId).eq("owner_id", sellerId).single(),
+  ]);
+  if (relation.error || !relation.data || result.error || !result.data)
+    throw Object.assign(Error("La cuenta de Mercado Libre ya no está vinculada a este proveedor."), { status: 403 });
+  return accessOwned(sellerId, accountId, result.data.seller_id);
+}
+async function accessOwned(id: string, accountId: string, sellerId: string) {
   for (let attempt = 0; attempt < 40; attempt++) {
-    const { data, error } = await admin().from("meli_accounts").select("encrypted_tokens").eq("id", account.id).eq("owner_id", id).single();
+    const { data, error } = await admin().from("meli_accounts").select("encrypted_tokens").eq("id", accountId).eq("owner_id", id).single();
     if (error || !data) throw Error("No se pudo leer la cuenta conectada.");
     const tokens = unseal<Tokens>(data.encrypted_tokens);
-    if (String(tokens.user_id) !== account.seller_id) throw Error("La identidad de la cuenta no coincide.");
+    if (String(tokens.user_id) !== sellerId) throw Error("La identidad de la cuenta no coincide.");
     if (tokens.expires_at >= Date.now() + 120000) return tokens;
     const lease = randomUUID();
-    const locked = await admin().rpc("lease_meli_refresh", { p_actor: id, p_account: account.id, p_lease: lease, p_expected: data.encrypted_tokens });
+    const locked = await admin().rpc("lease_meli_refresh", { p_actor: id, p_account: accountId, p_lease: lease, p_expected: data.encrypted_tokens });
     if (locked.error) throw Error("No se pudo renovar la conexión.");
     if (!locked.data) { await new Promise((resolve) => setTimeout(resolve, 1000)); continue; }
     try {
       const refreshed = await exchange({ grant_type: "refresh_token", refresh_token: tokens.refresh_token });
-      if (String(refreshed.user_id) !== account.seller_id) throw Error("Identidad inválida al renovar.");
-      const saved = await admin().rpc("finish_meli_refresh", { p_actor: id, p_account: account.id, p_lease: lease, p_tokens: seal(refreshed) });
+      if (String(refreshed.user_id) !== sellerId) throw Error("Identidad inválida al renovar.");
+      const saved = await admin().rpc("finish_meli_refresh", { p_actor: id, p_account: accountId, p_lease: lease, p_tokens: seal(refreshed) });
       if (saved.error || !saved.data) throw Error("No se guardó la renovación. Volvé a conectar la cuenta.");
       return refreshed;
     } catch (e) {
-      await admin().rpc("finish_meli_refresh", { p_actor: id, p_account: account.id, p_lease: lease, p_tokens: null });
+      await admin().rpc("finish_meli_refresh", { p_actor: id, p_account: accountId, p_lease: lease, p_tokens: null });
       throw e;
     }
   }

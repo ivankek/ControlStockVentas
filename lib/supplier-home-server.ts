@@ -1,6 +1,6 @@
 import { admin } from "./server";
 import { profile, snapshot, accountListings } from "./inventory-server";
-import { access, get, type RawOrder } from "./meli";
+import { accessLinkedSupplier, get, type RawOrder } from "./meli";
 import { normalizeShipment, type Shipment } from "./shipping";
 import { localDate, today } from "./domain";
 import { unseal } from "./crypto";
@@ -63,13 +63,13 @@ export async function supplierSales(user: string, a: Account): Promise<HomeSales
     if (error) throw Error("No se pudo consultar Tiendanube.");
     const { token } = unseal<{token:string}>(data.encrypted_token);
     for (let page = 1; page <= 10; page++) {
-      const raw = await nubeGet(a.external, token, `/orders?status=open&payment_status=paid&page=${page}&per_page=50`).catch((e) => {
-        if (/rechazó el acceso/.test(e.message)) throw Error("Tiendanube rechazó la consulta de ventas. El vendedor debe autorizar el permiso de lectura de pedidos y renovar la conexión.");
+      const raw = await nubeGet(a.external, token, `/orders?status=open&payment_status=paid&shipping_status=unfulfilled&page=${page}&per_page=50`).catch((e) => {
+        if (/rechazó el acceso|consulta.*\(403\)|consulta.*\(404\)/i.test(e.message)) throw Error("Tiendanube respondió que no se pudo acceder a los pedidos. Revisá el permiso de lectura de pedidos y el ID de tienda. Si acabás de cambiar permisos, reconectá la tienda para renovar la autorización.");
         throw e;
       });
       if (!Array.isArray(raw)) throw Error("Tiendanube devolvió una lista inválida.");
       for (const o of raw) {
-        if (o.status !== "open" || o.payment_status !== "paid" || !["unpacked", "packed", "unfulfilled"].includes(o.shipping_status)) continue;
+        if (o.status !== "open" || o.payment_status !== "paid" || !["unpacked", "unfulfilled"].includes(o.shipping_status)) continue;
         const lines = (o.products ?? []).flatMap((p: {product_id: number; variant_id: number; name: string; quantity: number}) => line(`${p.product_id}:${p.variant_id}`, p.name, p.quantity));
         if (lines.length) orders.push({ id: String(o.id), mode: o.shipping_option || "Tiendanube", group: "review", lines, note: "Pendiente de envío; Tiendanube no informa aquí un plazo de despacho verificable." });
       }
@@ -77,7 +77,7 @@ export async function supplierSales(user: string, a: Account): Promise<HomeSales
       if (page === 10) warnings.push("Tiendanube superó 500 pedidos abiertos. La consulta es parcial.");
     }
   } else {
-    const tokens = await access(a.owner, a.id), raw = new Map<string, RawOrder>();
+    const tokens = await accessLinkedSupplier(user, a.owner, a.id), raw = new Map<string, RawOrder>();
     const deadline = Date.now() + 210000;
     for (const status of ["ready_to_ship", "handling", "pending", "to_be_agreed"]) {
       for (let offset = 0; offset < 500; offset += 50) {
