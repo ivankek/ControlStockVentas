@@ -6,7 +6,7 @@ import { localDate, today } from "./domain";
 import { unseal } from "./crypto";
 import { nubeGet } from "./tiendanube";
 import type { NubeProduct } from "./tiendanube-catalog";
-import { dispatchGroup, pendingShipment, type HomeAccount, type HomeSale, type HomeSales } from "./supplier-home";
+import { dispatchGroup, dispatchMode, pendingShipment, type HomeAccount, type HomeSale, type HomeSales } from "./supplier-home";
 
 export async function supplierAccounts(user: string) {
   if ((await profile(user)).role !== "SUPPLIER") throw Object.assign(Error("Este inicio es exclusivo del proveedor."), { status: 403 });
@@ -112,7 +112,7 @@ export async function supplierSales(user: string, a: Account): Promise<HomeSales
           const group = dispatchGroup(expected, date); if (group === "future") return;
           orders.push({ id: String(o.id), shipment: shipmentId, lines, group,
             due: expected && Number.isFinite(Date.parse(expected)) ? localDate(expected) : undefined,
-            mode: shipment.logistic_type === "self_service" ? "Flex" : shipment.mode === "me2" ? "Mercado Envíos" : "Otro / acordar",
+            mode: dispatchMode(shipment),
             ...(group === "review" ? { note: "Sin plazo de despacho verificable en Mercado Libre." } : {}) });
         } catch { orders.push({ id: String(o.id), shipment: shipmentId, mode: "Sin verificar", group: "review", lines, note: "No se pudo consultar el estado del envío." }); }
       }));

@@ -793,6 +793,17 @@ h1 { margin-bottom: 6px; font-size: 30px; }
 .platform-title img { object-fit: contain; flex: 0 0 32px; }
 .nube-connection { margin: 24px 0; }
 .supplier-account { background: white; border: 1px solid var(--line, #dce5e3); border-radius: 14px; padding: 24px; margin: 24px 0; min-width: 0; }
+.supplier-account[hidden] { display: none; }
+.supplier-overview { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin: 20px 0 12px; }
+.supplier-overview article { background: white; border: 1px solid var(--line, #dce5e3); border-radius: 12px; padding: 20px; }
+.supplier-overview span { font-size: 13px; font-weight: 600; }
+.supplier-overview strong { display: block; font-size: 32px; margin: 12px 0 8px; }
+.supplier-overview small, .supplier-summary-status { color: #69817e; font-size: 12px; }
+.supplier-tabs button > span { text-align: left; }
+.supplier-tabs small { display: block; font-size: 11px; font-weight: 400; margin-top: 4px; color: #69817e; }
+.supplier-tabs + .supplier-account { margin-top: 16px; }
+@media (max-width: 1200px) { .supplier-overview { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .supplier-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); } .supplier-overview article { padding: 14px; } }
 .supplier-account-heading, .supplier-sale-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .supplier-account-heading h2 { margin: 6px 0; }
 .supplier-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }

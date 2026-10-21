@@ -1,6 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dispatchGroup, pendingShipment } from "../lib/supplier-home";
+import { dispatchGroup, dispatchMode, pendingShipment } from "../lib/supplier-home";
+
+test("identifica logística del envío en formato nuevo y heredado sin inferirla por me2", () => {
+  assert.equal(dispatchMode({id: 1, status: "ready_to_ship", logistic: {mode: "me2", type: "self_service"}}), "Flex");
+  assert.equal(dispatchMode({id: 1, status: "ready_to_ship", mode: "me2", logistic_type: "self_service"}), "Flex");
+  assert.equal(dispatchMode({id: 1, status: "ready_to_ship", logistic: {mode: "me2", type: "cross_docking"}}), "Mercado Envíos · Colecta");
+  assert.equal(dispatchMode({id: 1, status: "ready_to_ship", logistic_type: "xd_drop_off"}), "Mercado Envíos · Agencia");
+  assert.equal(dispatchMode({id: 1, status: "ready_to_ship", logistic_type: "drop_off"}), "Mercado Envíos · Correo");
+  assert.equal(dispatchMode({id: 1, status: "ready_to_ship", mode: "me2"}), "Tipo de envío sin confirmar");
+  assert.equal(dispatchMode({id: 1, status: "ready_to_ship", mode: "me2", logistic_type: "unknown"}), "Tipo de envío sin confirmar");
+});
 
 test("el plazo de despacho usa la fecha argentina y separa atrasados, hoy y futuros", () => {
   assert.equal(dispatchGroup("2026-10-21T02:00:00Z", "2026-10-21"), "late");

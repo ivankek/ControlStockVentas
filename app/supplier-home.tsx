@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { HomeAccount, HomeSales, HomeListing } from "@/lib/supplier-home";
 
 async function request<T>(token: string, account?: string, signal?: AbortSignal): Promise<T> {
@@ -20,7 +20,8 @@ function Listings({ listings, linked }: { listings: HomeListing[]; linked: boole
     </li>)}</ul>}
   </details>;
 }
-function Account({ account, token }: { account: HomeAccount; token: string }) {
+type Report = { sales?: HomeSales; busy: boolean; error: string };
+function Account({ account, token, active, onReport }: { account: HomeAccount; token: string; active: boolean; onReport: (id: string, report: Report) => void }) {
   const [sales, setSales] = useState<HomeSales>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
@@ -34,8 +35,9 @@ function Account({ account, token }: { account: HomeAccount; token: string }) {
     }).finally(() => { if (!controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
   }, [token, account.id, revision]);
+  useEffect(() => { onReport(account.id, {sales, busy, error}); }, [account.id, sales, busy, error, onReport]);
   const listings = account.listings.filter((l) => `${l.title} ${l.variant} ${l.sku ?? ""} ${l.key}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  return <section className="supplier-account">
+  return <section className="supplier-account" role="tabpanel" id={`account-panel-${account.id}`} aria-labelledby={`account-tab-${account.id}`} hidden={!active}>
     <div className="supplier-account-heading"><div><small>{account.platform === "meli" ? "Mercado Libre" : "Tiendanube"}</small><h2>{account.name}</h2></div>
       <button disabled={busy} onClick={() => setRevision((r) => r+1)}>{busy ? "Consultando ventas…" : "Actualizar ventas"}</button></div>
     {error && <div className="notice" role="alert">{error}</div>}
@@ -66,17 +68,36 @@ export default function SupplierHome({ token }: { token?: string }) {
   const [accounts, setAccounts] = useState<HomeAccount[]>();
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [selected, setSelected] = useState("");
+  const [reports, setReports] = useState<Record<string, Report>>({});
+  const onReport = useCallback((id: string, report: Report) => setReports((current) => ({...current, [id]: report})), []);
   useEffect(() => {
     if (!token) return;
-    const controller = new AbortController(); setAccounts(undefined); setError("");
+    const controller = new AbortController(); setAccounts(undefined); setError(""); setReports({});
     request<{accounts:HomeAccount[]}>(token, undefined, controller.signal).then((data) => setAccounts(data.accounts)).catch((e) => { if (!controller.signal.aborted) setError(e.message); });
     return () => controller.abort();
   }, [token, revision]);
-  return <div className="supplier-home"><div className="toolbar"><p>Hoy y atrasados pendientes, según el plazo de despacho informado por la plataforma.</p><button disabled={!token || (!accounts && !error)} onClick={() => setRevision((r) => r+1)}>Actualizar inicio</button></div>
-    <p>Ves las cuentas de tus vendedores vinculados. El detalle de ventas incluye tus productos y los que todavía no tienen asociación.</p>
+  const active = accounts?.some((a) => a.id === selected) ? selected : accounts?.[0]?.id;
+  const loaded = accounts?.filter((a) => reports[a.id]?.sales && !reports[a.id]?.busy) ?? [];
+  const orders = loaded.flatMap((a) => reports[a.id].sales!.orders);
+  const incomplete = accounts?.some((a) => !reports[a.id]?.sales || reports[a.id]?.busy || reports[a.id]?.sales?.warnings.length);
+  const cards = [
+    { label: "Cuentas vinculadas", value: accounts?.length, detail: "Mercado Libre y Tiendanube" },
+    { label: "Ventas para hoy", value: loaded.length ? orders.filter((o) => o.group === "today").length : undefined, detail: "Pendientes de despacho" },
+    { label: "Ventas atrasadas", value: loaded.length ? orders.filter((o) => o.group === "late").length : undefined, detail: "Todavía pendientes" },
+    { label: "Ventas para revisar", value: loaded.length ? orders.filter((o) => o.group === "review").length : undefined, detail: "Sin fecha o estado confirmado" },
+    { label: "Sin asociar", value: accounts?.some((a) => a.error) ? undefined : accounts?.reduce((n, a) => n + a.listings.filter((l) => !l.linked).length, 0), detail: "Variantes de publicaciones" },
+  ];
+  return <div className="supplier-home"><div className="toolbar"><p>Resumen de todas tus cuentas vinculadas.</p><button disabled={!token || (!accounts && !error)} onClick={() => setRevision((r) => r+1)}>Actualizar inicio</button></div>
+    <div className="supplier-overview">{cards.map((card) => <article key={card.label}><span>{card.label}</span><strong>{card.value ?? "—"}</strong><small>{card.detail}</small></article>)}</div>
+    {!!accounts?.length && <p className="supplier-summary-status" role="status">{incomplete ? `Resumen parcial · ${loaded.length} de ${accounts.length} cuentas consultadas. Revisá los avisos de cada cuenta.` : "Resumen de todas las cuentas actualizado."}</p>}
     {error && <div className="notice" role="alert">{error}</div>}
     {!accounts && !error && <p role="status">Cargando cuentas vinculadas…</p>}
     {accounts?.length === 0 && <p>Todavía no hay cuentas conectadas de vendedores vinculados a este proveedor.</p>}
-    {token && accounts?.map((a) => <Account key={`${revision}:${a.platform}:${a.id}`} account={a} token={token} />)}
+    {!!accounts?.length && <div className="platform-tabs supplier-tabs" role="tablist" aria-label="Cuentas vinculadas">{accounts.map((a, index) => <button key={a.id} id={`account-tab-${a.id}`} role="tab" aria-selected={active === a.id} aria-controls={`account-panel-${a.id}`} tabIndex={active === a.id ? 0 : -1} onClick={() => setSelected(a.id)} onKeyDown={(e) => {
+      const next = e.key === "ArrowRight" ? (index + 1) % accounts.length : e.key === "ArrowLeft" ? (index + accounts.length - 1) % accounts.length : e.key === "Home" ? 0 : e.key === "End" ? accounts.length - 1 : -1;
+      if (next < 0) return; e.preventDefault(); setSelected(accounts[next].id); document.getElementById(`account-tab-${accounts[next].id}`)?.focus();
+    }}><img src={a.platform === "meli" ? "https://http2.mlstatic.com/frontend-assets/ui-navigation/6.6.139/mercadolibre/favicon.svg" : "/platforms/tiendanube.png"} alt="" width={26} height={26} /><span>{a.name}<small>{a.platform === "meli" ? "Mercado Libre" : "Tiendanube"}</small></span></button>)}</div>}
+    {token && accounts?.map((a) => <Account key={`${revision}:${a.platform}:${a.id}`} account={a} token={token} active={active === a.id} onReport={onReport} />)}
   </div>;
 }
