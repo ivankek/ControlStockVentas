@@ -1,5 +1,6 @@
 "use client";
 import Stock from "./stock";
+import SupplierHome from "./supplier-home";
 import { ViewStateProvider } from "./view-state";
 import StockSync from "./stock-sync";
 import Users from "./users";
@@ -14,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   Package,
+  House,
   Boxes,
   UsersRound,
   Truck,
@@ -54,6 +56,14 @@ export default function Dashboard({ configured }: { configured: boolean }) {
   const [token, setToken] = useState<string>();
   const [sessionUser, setSessionUser] = useState("");
   const [inventory, setInventory] = useState<InventorySnapshot>();
+  const initialProfile = useRef("");
+  useEffect(() => {
+    if (!inventory) { initialProfile.current = ""; return; }
+    const key = `${inventory.profile.id}:${inventory.profile.role}`;
+    if (initialProfile.current === key) return;
+    initialProfile.current = key;
+    if (inventory.profile.role === "SUPPLIER") setTab("Inicio");
+  }, [inventory]);
   const [account, setAccount] = useState("");
   const [connected, setConnected] = useState(false);
   const [loaded, setLoaded] = useState(!configured);
@@ -309,6 +319,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
         </div>
         <nav aria-label="Secciones">
           {[
+            ...(inventory?.profile.role === "SUPPLIER" ? [{ name: "Inicio", icon: House }] : []),
             { name: "Despachos", icon: Truck },
             { name: "Publicaciones", icon: Package },
             ...(demo ? [{ name: "Costos", icon: Tag }] : []),
@@ -316,7 +327,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
             ...(inventory?.profile.role === "ADMIN" ? [{ name: "Usuarios", icon: UsersRound }] : []),
             ...(canViewFinance ? [{ name: "Gastos del negocio", icon: Receipt }, { name: "Ganancias", icon: Wallet }] : []),
             { name: "Conexión", icon: Link2 },
-          ].filter(({ name }) => inventory?.profile.role !== "SUPPLIER" || ["Stock", "Conexión"].includes(name)).map(({ name, icon: Icon }) => (
+          ].filter(({ name }) => inventory?.profile.role !== "SUPPLIER" || ["Inicio", "Stock", "Conexión"].includes(name)).map(({ name, icon: Icon }) => (
             <button
               className={tab === name ? "active" : ""}
               aria-current={tab === name ? "page" : undefined}
@@ -347,7 +358,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
           <span className="pill">
             {demo
               ? "Vista de prueba"
-              : connected
+              : inventory?.profile.role === "SUPPLIER" ? "Perfil proveedor" : connected
                 ? "Cuenta conectada"
                 : "Conexión pendiente"}
           </span>
@@ -369,7 +380,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
               <div className="eyebrow">CONTROL DIARIO</div>
               <h1>{tab === "Despachos" ? "Cada despacho, en orden." : tab}</h1>
               <p>
-                {tab === "Despachos"
+                {tab === "Inicio" ? "Ventas a despachar y publicaciones de tus cuentas vinculadas." : tab === "Despachos"
                   ? "Revisá qué salió y cuánto tenés que pagarle a tu proveedor."
                   : tab === "Publicaciones"
                     ? "Importá y asociá los catálogos de tus cuentas conectadas."
@@ -419,6 +430,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
           {inventory && ["Despachos", "Ganancias"].includes(tab) && <div className="toolbar"><label>Cuenta Mercado Libre<select aria-label="Cuenta Mercado Libre" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">Seleccionar cuenta</option>{ownAccounts.map((a) => <option value={a.id} key={a.id}>{a.nickname ?? "Cuenta ML"} · {a.seller_id}</option>)}</select></label>{!ownAccounts.length && <span>Conectá una cuenta desde Conexión.</span>}</div>}
           {!demo && <StockSync token={token} revision={stockRevision} onUpdated={() => void inventoryCommand()} />}
           {tab === "Stock" && <Stock />}
+          {tab === "Inicio" && inventory?.profile.role === "SUPPLIER" && <SupplierHome token={token} />}
           {tab === "Usuarios" && <Users />}
           {tab === "Publicaciones" && <PlatformListings token={token} />}
           {canViewFinance && tab === "Gastos del negocio" && <BusinessCosts key={account} token={token} />}
