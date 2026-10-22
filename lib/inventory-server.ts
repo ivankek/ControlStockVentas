@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { admin, readState } from "./server";
-import { canConnect, type AppUser, type InventorySnapshot } from "./inventory";
+import { canConnect, visibleInventory, type AppUser, type InventorySnapshot } from "./inventory";
 import type { Listing } from "./listings";
 import type { State } from "./domain";
 import { emptyBusiness, type Business } from "./business";
@@ -17,13 +17,13 @@ export async function sellerProfile(user: string) {
 }
 export async function adminProfile(user: string) {
   const p = await profile(user);
-  if (p.role !== "ADMIN") throw Object.assign(new Error("Solo el administrador puede acceder a ganancias y gastos."), { status: 403 });
+  if (p.role !== "ADMIN") throw Object.assign(new Error("Solo el administrador puede acceder a esta sección."), { status: 403 });
   return p;
 }
 export async function snapshot(user: string): Promise<InventorySnapshot> {
   const { data, error } = await admin().rpc("inventory_snapshot", { p_actor: user });
   if (error) throw Error("No se pudo consultar inventario y permisos. Verificá la migración 002_inventory.");
-  return data as InventorySnapshot;
+  return visibleInventory(data as InventorySnapshot);
 }
 export async function accountFor(user: string, accountId?: string | null) {
   await sellerProfile(user);

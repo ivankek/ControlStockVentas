@@ -301,6 +301,8 @@ export default function Dashboard({ configured }: { configured: boolean }) {
   }
   const [stockRevision, setStockRevision] = useState(0);
   const canViewFinance = inventory?.profile.role === "ADMIN";
+  const canViewDispatches = inventory?.profile.role === "ADMIN";
+  useEffect(() => { if (!demo && inventory && !canViewDispatches && tab === "Despachos") setTab(inventory.profile.role === "SUPPLIER" ? "Inicio" : "Publicaciones"); }, [demo, inventory, canViewDispatches, tab]);
   useEffect(() => { if (!canViewFinance && ["Ganancias", "Gastos del negocio"].includes(tab)) setTab("Conexión"); }, [canViewFinance, tab]);
   const ownAccounts = inventory?.accounts.filter((a) => a.owner_id === inventory.profile.id) ?? [];
   return (
@@ -320,7 +322,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
         <nav aria-label="Secciones">
           {[
             ...(inventory?.profile.role === "SUPPLIER" ? [{ name: "Inicio", icon: House }] : []),
-            { name: "Despachos", icon: Truck },
+            ...(canViewDispatches || demo ? [{ name: "Despachos", icon: Truck }] : []),
             { name: "Publicaciones", icon: Package },
             ...(demo ? [{ name: "Costos", icon: Tag }] : []),
             { name: "Stock", icon: Boxes },
@@ -387,7 +389,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                   : tab === "Costos"
                     ? "El precio que te cobra tu proveedor por cada unidad vendida."
                   : tab === "Stock"
-                    ? "Productos del proveedor, precios y stock en un solo lugar."
+                    ? (inventory?.profile.role === "USER" ? "Productos del proveedor y stock en un solo lugar." : "Productos del proveedor, precios y stock en un solo lugar.")
                   : tab === "Usuarios"
                     ? "Roles y relaciones entre proveedores y vendedores."
                   : tab === "Gastos del negocio"
@@ -435,7 +437,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
           {tab === "Publicaciones" && <PlatformListings token={token} />}
           {canViewFinance && tab === "Gastos del negocio" && <BusinessCosts key={account} token={token} />}
           {canViewFinance && tab === "Ganancias" && <Profits key={account} token={account ? token : undefined} />}
-          {tab === "Despachos" && !demo && <DispatchQuery key={account} token={account ? token : undefined} />}
+          {canViewDispatches && tab === "Despachos" && !demo && <DispatchQuery key={account} token={account ? token : undefined} />}
           {tab === "Despachos" && demo && (
             <>
               <div className="toolbar">
@@ -955,7 +957,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                   <ArrowUpRight size={16} />
                 </button>
                 <TiendanubeConnection token={token} />
-                <h3>4. Costos del proveedor</h3>
+                {canViewDispatches && <><h3>4. Costos del proveedor</h3>
                 <p>
                   La consulta por fecha es temporal. Los pedidos consultados no se guardan ni se incorporan a Costos o Liquidaciones.
                 </p>
@@ -964,7 +966,7 @@ export default function Dashboard({ configured }: { configured: boolean }) {
                   onClick={() => setTab("Despachos")}
                 >
                   Ir a mis despachos
-                </button>
+                </button></>}
                 </>}
                 {!token && (
                   <button

@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { owner, fail, readState } from "@/lib/server";
 import { today } from "@/lib/domain";
 import { dateSchema } from "@/lib/commands";
-import { accountFor, requestedAccount, scopedBusiness } from "@/lib/inventory-server";
+import { adminProfile, accountFor, requestedAccount, scopedBusiness } from "@/lib/inventory-server";
 import { applyDispatchNotes } from "@/lib/dispatch-query";
 import { runDispatchQuery } from "@/lib/run-dispatch-query";
 import { executeDispatchJob, readDispatchJob, startDispatchJob } from "@/lib/dispatch-jobs";
@@ -10,6 +10,7 @@ export const maxDuration = 300;
 export async function GET(request: Request) {
   try {
     const id = await owner(request);
+    await adminProfile(id);
     const account = await accountFor(id, requestedAccount(request));
     let job = await readDispatchJob(id, account.id);
     if (job?.status === "done" && job.result) {
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const id = await owner(request);
+    await adminProfile(id);
     const { date, from, background } = await request.json();
     const selected = dateSchema.parse(date);
     const start = dateSchema.parse(from ?? date);

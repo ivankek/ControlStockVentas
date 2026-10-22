@@ -4,8 +4,9 @@ import { emptyState } from "./domain";
 import { dispatchQueryResult } from "./dispatch-query";
 import { carrierReport } from "./flex-carrier";
 import { manualDispatches, resolveFlexShipments } from "./business";
-import { accountFor, catalogState, scopedBusiness } from "./inventory-server";
+import { adminProfile, accountFor, catalogState, scopedBusiness } from "./inventory-server";
 export async function runDispatchQuery(id: string, account: Awaited<ReturnType<typeof accountFor>>, selected: string, start: string, progress?: (stage: string, done: number, total: number) => Promise<void>) {
+ await adminProfile(id);
  const began = Date.now();
     const state = await catalogState(id, account.id);
     state.business = await scopedBusiness(id, account, state.business);

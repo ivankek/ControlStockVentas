@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { owner, fail } from "@/lib/server";
-import { accountFor, requestedAccount } from "@/lib/inventory-server";
+import { adminProfile, accountFor, requestedAccount } from "@/lib/inventory-server";
 import { access } from "@/lib/meli";
 import { readReturnResource } from "@/lib/meli-returns-read";
 import { returnsPage } from "@/lib/dispatch-returns";
@@ -10,6 +10,7 @@ const schema = z.object({ from: z.iso.date(), to: z.iso.date(), offset: z.number
 export async function POST(request: Request) {
   try {
     const user = await owner(request);
+    await adminProfile(user);
     const account = await accountFor(user, requestedAccount(request));
     const { from, to, offset } = schema.parse(await request.json());
     if (from > to || Date.parse(to) - Date.parse(from) > 366 * 86400000) throw Error("Revisá el período de devoluciones.");

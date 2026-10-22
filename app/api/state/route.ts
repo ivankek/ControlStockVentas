@@ -1,11 +1,12 @@
 import { owner, readState, fail } from "@/lib/server";
 import { snapshot } from "@/lib/inventory-server";
+import { emptyState } from "@/lib/domain";
 export async function GET(request: Request) {
   try {
     const id = await owner(request);
-    const { state } = await readState(id);
     const inventory = await snapshot(id);
-    if (inventory.profile.role !== "ADMIN") delete state.business;
+    const state = inventory.profile.role === "ADMIN" ? (await readState(id)).state : emptyState();
+    delete state.business;
     return Response.json(
       { state, connected: inventory.accounts.some((a) => a.owner_id === id), inventory },
       { headers: { "Cache-Control": "no-store" } },

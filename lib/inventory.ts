@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 export type Role = "ADMIN" | "USER" | "SUPPLIER";
+export function canViewStockPrices(role: Role) { return role === "ADMIN" || role === "SUPPLIER"; }
+export function visibleInventory(data: InventorySnapshot): InventorySnapshot {
+  return canViewStockPrices(data.profile.role) ? data : { ...data, variants: data.variants.map((v) => ({ ...v, costs: [] })) };
+}
 export type AppUser = { id: string; role: Role; display_name: string };
 export type MeliAccount = { id: string; owner_id: string; seller_id: string; nickname: string | null; updated_at: string };
 export const quantity = z.number().int().min(0).max(1000000000);
