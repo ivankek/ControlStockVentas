@@ -128,6 +128,8 @@ export type RawOrder = {
     };
     quantity: number;
     sale_fee?: number;
+    unit_price?: number;
+    gross_price?: number;
   }[];
 };
 

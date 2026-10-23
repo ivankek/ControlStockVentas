@@ -18,6 +18,7 @@ test("ganancias consulta API ML y MP sin persistir ventas; notas verifican propi
     if (url.pathname === "/auth/v1/user") return Response.json({ id: "owner" });
     if (url.pathname === "/rest/v1/meli_connections") return Response.json({ encrypted_tokens: tokens });
     if (url.pathname === "/orders/999") return Response.json({ id: 999, seller: { id: 111 } });
+    if (url.pathname === "/orders/100/discounts") return Response.json({ details: [] });
     if (url.pathname === "/orders/search") {
       assert.equal(url.searchParams.get("seller"), "42");
       return Response.json({ paging: { total: 1 }, results: [{ id: 100, pack_id: withShipping ? 200 : null, seller: { id: 42 }, status: "paid", date_created: "2026-09-10T12:00:00Z", total_amount: 100, currency_id: "ARS", payments: [{ id: 500, status: "approved" }], order_items: [{ item: { id: "MLA1", title: "Producto" }, quantity: 1 }] }] });

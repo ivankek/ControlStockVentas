@@ -821,3 +821,7 @@ h1 { margin-bottom: 6px; font-size: 30px; }
 .supplier-listings { margin-top: 20px; }
 .supplier-listings summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
 @media (max-width: 700px) { .supplier-account { padding: 16px; } .supplier-counts { grid-template-columns: 1fr; } }
+.profit-quick-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.profit-quick-dialog select { width: 100%; }
+.profit-quick-dialog small { display: block; margin-top: 6px; }
+.profit-zone-map { display: block; width: 100%; height: auto; margin: 16px 0; border-radius: 8px; }

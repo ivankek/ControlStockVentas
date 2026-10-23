@@ -5,7 +5,7 @@ import { supplierReport } from "./supplier";
 import type { FlexCredit } from "./flex-credits";
 import type { SaleShipping } from "./sale-shipping";
 import { periodExpenses } from "./business-expenses";
-export type Sale = Order & { shippingCosts?: SaleShipping; flexReconciliation?: "deferred" | "queried" | "partial"; grossCents?: number; receivedCents?: number; paymentBaseCents?: number; flexCredits?: FlexCredit[]; flexCreditsUnavailable?: boolean; paymentIds: string[]; issues: string[] };
+export type Sale = Order & { shippingCosts?: SaleShipping; flexReconciliation?: "deferred" | "queried" | "partial"; grossCents?: number; discountCents?: number; discountsUnavailable?: boolean; receivedCents?: number; paymentBaseCents?: number; flexCredits?: FlexCredit[]; flexCreditsUnavailable?: boolean; paymentIds: string[]; issues: string[] };
 export function monthlyExpenses(business: Business, from: string, to: string) {
   let tax = 0, billing = 0;
   for (let day = from; day <= to; day = new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10)) {
@@ -51,7 +51,7 @@ export function profitRows(state: State, sales: Sale[]) {
     if (note?.netCents === undefined && sale.paymentIds.some((id) => paymentCounts.get(id)! > 1)) { received = undefined; issues.push("Pago compartido: completar el neto correspondiente a esta orden"); }
     let bonus = 0, bonusAdded = 0, bonusCount = 0, bonusUnresolved = false;
     let bonusEstimate: ReturnType<typeof zoneBonus> | undefined;
-    let bonusElsewhere = false;
+    let bonusElsewhere = false, bonusFallback = false;
     let bonusReason: string | undefined;
     let manualBonus: "included" | "add" | undefined;
     if (sale.mode === "flex" && sale.orderStatus === "paid" && !sale.cancelled && sale.shippingStatus !== "cancelled") {
@@ -79,8 +79,16 @@ export function profitRows(state: State, sales: Sale[]) {
           const complete = group.every((item) => item.paymentBaseCents !== undefined && item.receivedCents !== undefined && business.notes[item.id]?.netCents === undefined && item.paymentIds.every((id) => paymentCounts.get(id) === 1));
           const included = complete ? group.reduce((sum, item) => sum + item.receivedCents! - item.paymentBaseCents!, 0) : undefined;
           const hasManualReceived = group.some((item) => business.notes[item.id]?.netCents !== undefined);
+          const fallbackEligible = manualBonus === undefined && included !== 0 && included !== bonus && !hasManualReceived && group.every((item) => item.grossCents !== undefined && !item.discountsUnavailable && item.receivedCents !== undefined && item.paymentIds.length > 0 && item.paymentIds.every((id) => paymentCounts.get(id) === 1));
+          const fallbackBase = fallbackEligible ? group.reduce((sum, item) => sum + item.grossCents! - Math.round(item.grossCents! * 1415 / 10000), 0) : undefined;
+          const fallbackReceived = fallbackEligible ? group.reduce((sum, item) => sum + item.receivedCents!, 0) : undefined;
           if (manualBonus === "included") { /* Confirmed by the seller; do not add again. */ }
           else if ((manualBonus === "add" && !hasManualReceived) || (manualBonus === undefined && included === 0)) { bonusAdded = bonus; received += bonus; }
+          else if (fallbackBase !== undefined && fallbackReceived !== undefined) {
+            bonusFallback = true;
+            // Allow one cent per payment for commission rounding (e.g. $5,907.625).
+            if (fallbackReceived <= fallbackBase + group.length) { bonusAdded = bonus; received += bonus; }
+          }
           else if (manualBonus === "add" || included !== bonus) {
             bonusUnresolved = true;
             bonusReason = "No se pudo verificar si el ingreso Flex ya está incluido en el recibido";
@@ -106,7 +114,7 @@ export function profitRows(state: State, sales: Sale[]) {
     }
     const usable = sale.orderStatus === "paid" && !supplier.missing.length && received !== undefined && shipping !== undefined && !sale.review && !bonusUnresolved;
     if (sale.review) issues.push(sale.review);
-    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusEstimate, bonusElsewhere, bonusReason, manualBonus, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
+    return { sale, date, flex, bonus, bonusAdded, bonusCount, bonusUnresolved, bonusEstimate, bonusElsewhere, bonusFallback, bonusReason, manualBonus, gross: sale.orderStatus === "paid" ? sale.grossCents : undefined, received, supplier: supplier.missing.length ? undefined : supplier.totalCents, shipping, net: usable ? received! - supplier.totalCents - shipping! : undefined, issues: [...new Set(issues)], manualNet: note?.netCents !== undefined };
   });
 }
 export function reportTotals(rows: ReturnType<typeof profitRows>, business: Business, from: string, to: string) {

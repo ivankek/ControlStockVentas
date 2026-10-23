@@ -4,6 +4,7 @@ import { shippingResolverForQuery } from "./sale-shipping";
 import type { Sale } from "./profit";
 import { createGeorefResolver } from "./georef";
 import { paymentBase, orderPaymentFee, type PaymentFees } from "./flex-credits";
+import { discountedGross, type OrderDiscounts } from "./order-discounts";
 export const amountCents = (value: unknown): number | undefined => typeof value === "number" && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100)) ? Math.round(value * 100) : undefined;
 
 async function paymentNet(id: number, seller: number, token: string): Promise<{ net: number; fees: PaymentFees } | undefined> {
@@ -33,6 +34,10 @@ export async function salesPage(user: string, from: string, to: string, offset: 
       if (raw.seller?.id !== tokens.user_id || !Number.isSafeInteger(raw.id) || !Number.isFinite(Date.parse(raw.date_created)) || !Array.isArray(raw.order_items)) throw Error("Venta incompleta o de otra cuenta.");
       const sale: Sale = { id: String(raw.id), mode: "acordar", orderStatus: raw.status, createdAt: raw.date_created, cancelled: raw.status === "cancelled", lines: raw.order_items.map((line) => { if (!Number.isInteger(line.quantity) || line.quantity <= 0) throw Error("Cantidad inválida en la venta."); return { productId: `${line.item.id}:${line.item.variation_id ?? 0}`, quantity: line.quantity }; }), buyerName: raw.buyer?.nickname, grossCents: raw.currency_id === "ARS" ? amountCents(raw.total_amount) : undefined, paymentIds: [], issues: [] };
       if (sale.grossCents === undefined) sale.issues.push("Importe bruto en ARS no disponible");
+      if (sale.grossCents !== undefined) {
+        try { Object.assign(sale, discountedGross(raw, await get<OrderDiscounts>(`/orders/${raw.id}/discounts`, tokens.access_token))); }
+        catch { sale.discountsUnavailable = true; sale.issues.push("No se pudieron verificar los descuentos y cupones de la venta"); }
+      }
       sale.packId = raw.pack_id ? String(raw.pack_id) : undefined;
       sale.flexReconciliation = "deferred";
       const shipping = await resolveShipping(raw);

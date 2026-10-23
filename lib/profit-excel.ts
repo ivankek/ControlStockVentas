@@ -33,7 +33,7 @@ export async function profitExcel(rows: Rows, state: State) {
       row.sale.cancelled || row.sale.shippingStatus === "cancelled" ? "Cancelado · " + mode : mode,
       row.flex ? row.flex.zone ? FLEX_LABELS[row.flex.zone] : "Zona desconocida" : "",
       amount(row.gross, "A revisar"), amount(row.received), amount(row.supplier), bonus, amount(row.shipping), amount(row.net),
-      row.issues.length ? row.issues.join("\n") : "Sin pendientes", detail]);
+      row.issues.length ? row.issues.join("\n") : "Sin pendientes", detail + (row.bonusFallback ? " · regla del 14,15%" : "")]);
   }
   sheet.getColumn(1).numFmt = "dd/mm/yyyy";
   sheet.getColumn(2).numFmt = "@";
