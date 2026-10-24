@@ -79,7 +79,7 @@ export function profitRows(state: State, sales: Sale[]) {
           const complete = group.every((item) => item.paymentBaseCents !== undefined && item.receivedCents !== undefined && business.notes[item.id]?.netCents === undefined && item.paymentIds.every((id) => paymentCounts.get(id) === 1));
           const included = complete ? group.reduce((sum, item) => sum + item.receivedCents! - item.paymentBaseCents!, 0) : undefined;
           const hasManualReceived = group.some((item) => business.notes[item.id]?.netCents !== undefined);
-          const fallbackEligible = manualBonus === undefined && included !== 0 && included !== bonus && !hasManualReceived && group.every((item) => item.grossCents !== undefined && !item.discountsUnavailable && item.receivedCents !== undefined && item.paymentIds.length > 0 && item.paymentIds.every((id) => paymentCounts.get(id) === 1));
+          const fallbackEligible = manualBonus === undefined && included !== 0 && included !== bonus && !hasManualReceived && group.every((item) => item.grossCents !== undefined && item.receivedCents !== undefined && item.paymentIds.length > 0 && item.paymentIds.every((id) => paymentCounts.get(id) === 1));
           const fallbackBase = fallbackEligible ? group.reduce((sum, item) => sum + item.grossCents! - Math.round(item.grossCents! * 1415 / 10000), 0) : undefined;
           const fallbackReceived = fallbackEligible ? group.reduce((sum, item) => sum + item.receivedCents!, 0) : undefined;
           if (manualBonus === "included") { /* Confirmed by the seller; do not add again. */ }

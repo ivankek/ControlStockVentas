@@ -6,7 +6,7 @@ import { profitRows, type Sale } from "../lib/profit";
 const sale = (extra: Partial<Sale> = {}): Sale => ({ id: "100", createdAt: "2026-10-02T12:00:00Z", orderStatus: "paid", cancelled: false, mode: "flex", province: "Capital Federal", city: "Flores", shipmentId: "1000", lines: [{ productId: "MLA1:0", quantity: 1 }], grossCents: 4000000, receivedCents: 3000000, paymentIds: ["500"], issues: [], ...extra });
 const state = () => ({ ...emptyState(), business: emptyBusiness(), supplierProducts: [{ id: "p", name: "Producto", costs: [{ from: "2026-09-01", cents: 1000000 }] }], supplierLinks: { "MLA1:0": { supplierId: "p", units: 1 } } });
 test("Flex pendiente: decisión manual suma solo cuando corresponde y se puede quitar", () => {
-  const s = state(), order = sale({ discountsUnavailable: true });
+  const s = state(), order = sale({ paymentIds: [] });
   assert.equal(profitRows(s, [order])[0].net, undefined);
   const included = updateBusiness(s, { type: "note", id: order.id, flexBonus: "included" }, order);
   assert.equal(profitRows(included, [order])[0].received, 3000000);

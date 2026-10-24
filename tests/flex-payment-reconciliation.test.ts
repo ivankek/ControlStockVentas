@@ -48,9 +48,9 @@ test("comisión vacía no significa cero; fallback respeta unidades, pagos y com
   assert.equal(paymentBase({ ...data, taxes_amount: -1 }, 705500), undefined);
 });
 
-test("sin descuentos verificables conserva recibido sin inferir; manual sigue siendo final", () => {
+test("sin bruto conserva recibido sin inferir; manual sigue siendo final", () => {
   for (const base of [undefined, 2490000, 1784400]) {
-    const row = profitRows(state(), [sale({ paymentBaseCents: base, discountsUnavailable: true })])[0];
+    const row = profitRows(state(), [sale({ paymentBaseCents: base, grossCents: undefined })])[0];
     assert.equal(row.received, 2683500);
     assert.equal(row.bonusAdded, 0);
     assert.equal(row.bonusUnresolved, true);
@@ -70,6 +70,16 @@ test("regla 14,15% solo como respaldo: iguales o menores suman; mayores ya inclu
   const confirmed = profitRows(state(), [sale({ grossCents: 4500000, receivedCents: 3800000, paymentBaseCents: 3710100 })])[0];
   assert.equal(confirmed.bonusFallback, false);
   assert.equal(confirmed.bonusAdded, 0);
+});
+
+test("la consulta de descuentos fallida no bloquea la regla con bruto y recibido disponibles", () => {
+  for (const receivedCents of [3089250, 2532575]) {
+    const row = profitRows(state(), [sale({ grossCents: 2950000, receivedCents, discountsUnavailable: true, issues: ["No se pudieron verificar los descuentos y cupones de la venta"] })])[0];
+    assert.equal(row.bonusFallback, true);
+    assert.equal(row.bonusUnresolved, false);
+    assert.equal(row.bonusAdded, receivedCents === 3089250 ? 0 : row.bonus);
+    assert.ok(row.issues.includes("No se pudieron verificar los descuentos y cupones de la venta"));
+  }
 });
 
 test("cupón: $41.750 menos comisión más $699 da $36.541,38", () => {
